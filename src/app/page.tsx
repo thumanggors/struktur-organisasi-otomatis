@@ -4,6 +4,7 @@ import { divisiColorMap } from "@/lib/divisiColor";
 import { getSettings } from "@/lib/settings";
 import OrgChart from "@/components/OrgChartLazy";
 import ExportButtons from "@/components/ExportButtonsLazy";
+import ZoomableChart from "@/components/ZoomableChart";
 
 export const dynamic = "force-dynamic";
 
@@ -19,9 +20,9 @@ export default async function HomePage() {
 
       <div className="mt-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
         <ExportButtons />
-        <div className="overflow-auto">
+        <ZoomableChart>
           <OrgChart roots={roots} companyName={settings?.companyName} logoUrl={settings?.logoUrl} colorMap={colorMap} />
-        </div>
+        </ZoomableChart>
       </div>
     </div>
   );

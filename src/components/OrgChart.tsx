@@ -67,7 +67,7 @@ function NodeLabel({
     <div className="inline-flex flex-col items-center">
       <Card node={node} colorMap={colorMap} />
       {/* Equal side columns keep the trunk exactly under the card's center. */}
-      <div className="grid grid-cols-[1fr_2px_1fr]">
+      <div className="grid w-max grid-cols-[1fr_2px_1fr]">
         <div aria-hidden="true" />
         <div className="bg-slate-300" aria-hidden="true" />
         <div className="flex flex-col gap-4 pt-4 pb-6">
@@ -100,7 +100,8 @@ function renderChildren(children: PersonNode[], colorMap: DivisiColorMap) {
     return (
       <TreeNode
         label={
-          <div className="grid grid-cols-2 gap-3">
+          // max-content columns: a 1fr grid shrinks to the parent's width and the cards overlap.
+          <div className="grid w-max grid-cols-[repeat(2,max-content)] gap-3">
             {children.map((child) => (
               <Card key={child.id} node={child} colorMap={colorMap} />
             ))}
