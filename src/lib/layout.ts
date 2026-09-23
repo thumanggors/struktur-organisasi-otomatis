@@ -145,3 +145,18 @@ export function layoutChart(roots: PersonNode[], manual: ManualLayout = { pos: {
   const height = Math.max(...cards.map((c) => c.y + CARD_H), ...buses.map((b) => b.y));
   return { cards, lines, buses, width, height };
 }
+
+/**
+ * Moves every card and bus line of `layout` by (dx, dy), as a full manual
+ * snapshot. The shift is clamped so nothing ends up left of / above the origin.
+ */
+export function shiftAll(layout: Layout, dx: number, dy: number): ManualLayout {
+  const minX = Math.min(...layout.cards.map((c) => c.x));
+  const minY = Math.min(...layout.cards.map((c) => c.y));
+  const sx = Math.max(dx, -minX);
+  const sy = Math.max(dy, -minY);
+  return {
+    pos: Object.fromEntries(layout.cards.map((c) => [c.node.id, { x: c.x + sx, y: c.y + sy }])),
+    busY: Object.fromEntries(layout.buses.map((b) => [b.parentId, b.y + sy])),
+  };
+}

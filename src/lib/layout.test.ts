@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CARD_H, CARD_W, layoutChart } from "./layout";
+import { CARD_H, CARD_W, layoutChart, shiftAll } from "./layout";
 import type { PersonNode } from "./tree";
 
 let seq = 0;
@@ -62,4 +62,17 @@ describe("layoutChart", () => {
     const { buses } = layoutChart([root], { pos: {}, busY: { [root.id]: 222 } });
     expect(buses).toEqual([expect.objectContaining({ parentId: root.id, y: 222 })]);
   });
+
+  it("shiftAll moves cards and bus lines together, clamped at the origin", () => {
+    const root = n("A", [n("B"), n("C")]);
+    const base = layoutChart([root]);
+    const moved = layoutChart([root], shiftAll(base, 40, 16));
+    base.cards.forEach((c, i) => expect(moved.cards[i]).toMatchObject({ x: c.x + 40, y: c.y + 16 }));
+    expect(moved.buses[0].y).toBe(base.buses[0].y + 16);
+    // can't push past the top-left corner
+    const clamped = layoutChart([root], shiftAll(base, -9999, -9999));
+    expect(Math.min(...clamped.cards.map((c) => c.x))).toBe(0);
+    expect(Math.min(...clamped.cards.map((c) => c.y))).toBe(0);
+  });
 });
+

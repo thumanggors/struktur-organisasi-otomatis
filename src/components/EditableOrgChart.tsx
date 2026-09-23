@@ -29,6 +29,7 @@ export default function EditableOrgChart({
   const [draft, setDraft] = useState<ManualLayout | null>(null);
   // Last saved layout, shown until router.refresh() delivers the new `saved` prop.
   const [committed, setCommitted] = useState<ManualLayout | null>(null);
+  const [selectedAll, setSelectedAll] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,6 +41,7 @@ export default function EditableOrgChart({
       if (!res.ok) throw new Error();
       setCommitted(next);
       setDraft(null);
+      setSelectedAll(false);
       router.refresh();
     } catch {
       setError("Gagal menyimpan tata letak. Coba lagi.");
@@ -69,7 +71,7 @@ export default function EditableOrgChart({
               <Save className="h-4 w-4" aria-hidden="true" />
               Simpan
             </button>
-            <button onClick={() => setDraft(null)} disabled={busy} className={`${btn} border-slate-200 bg-white hover:bg-slate-50`}>
+            <button onClick={() => (setDraft(null), setSelectedAll(false))} disabled={busy} className={`${btn} border-slate-200 bg-white hover:bg-slate-50`}>
               <X className="h-4 w-4" aria-hidden="true" />
               Batal
             </button>
@@ -77,7 +79,11 @@ export default function EditableOrgChart({
               <RotateCcw className="h-4 w-4 text-amber-600" aria-hidden="true" />
               Reset Otomatis
             </button>
-            <span className="text-sm text-slate-500">Geser kartu, atau titik biru pada garis untuk mengubah tinggi garis.</span>
+            <span className="text-sm text-slate-500">
+              {selectedAll
+                ? "Semua kartu & garis terpilih — geser untuk memindahkan semuanya. Klik area kosong atau Esc untuk batal."
+                : "Geser kartu, atau titik biru pada garis untuk mengubah tinggi garis. Tekan lama untuk memilih semua."}
+            </span>
           </>
         ) : (
           <button onClick={() => setDraft(committed ?? saved)} className={`${btn} border-slate-200 bg-white hover:bg-slate-50`}>
@@ -96,6 +102,9 @@ export default function EditableOrgChart({
           manual={draft ?? committed ?? saved}
           onMoveCard={draft ? (id, p) => setDraft((d) => d && { ...d, pos: { ...d.pos, [id]: p } }) : undefined}
           onMoveBus={draft ? (id, y) => setDraft((d) => d && { ...d, busY: { ...d.busY, [id]: y } }) : undefined}
+          selectedAll={!!draft && selectedAll}
+          onSelectAll={setSelectedAll}
+          onReplace={setDraft}
         />
       </ZoomableChart>
     </div>
