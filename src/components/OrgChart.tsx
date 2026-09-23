@@ -40,7 +40,7 @@ function Card({ node, colorMap }: { node: PersonNode; colorMap: DivisiColorMap }
 function StaffBranch({ node, colorMap }: { node: PersonNode; colorMap: DivisiColorMap }) {
   if (node.children.length === 0) return <Card node={node} colorMap={colorMap} />;
   return (
-    <Tree label={<Card node={node} colorMap={colorMap} />} lineWidth="2px" lineColor="#cbd5e1" lineBorderRadius="8px">
+    <Tree label={<Card node={node} colorMap={colorMap} />} lineWidth="3px" lineColor="#64748b" lineBorderRadius="8px">
       {renderChildren(node.children, colorMap)}
     </Tree>
   );
@@ -67,14 +67,14 @@ function NodeLabel({
     <div className="inline-flex flex-col items-center">
       <Card node={node} colorMap={colorMap} />
       {/* Equal side columns keep the trunk exactly under the card's center. */}
-      <div className="grid w-max grid-cols-[1fr_2px_1fr]">
+      <div className="grid w-max grid-cols-[1fr_3px_1fr]">
         <div aria-hidden="true" />
-        <div className="bg-slate-300" aria-hidden="true" />
+        <div className="bg-slate-500" aria-hidden="true" />
         <div className="flex flex-col gap-4 pt-4 pb-6">
           {staff.map((s) => (
             <div key={s.id} className="flex items-start">
               {/* mt-16 ≈ half a card's height, so the tick meets the staff card itself, not its subtree. */}
-              <div className="mt-16 h-0.5 w-6 shrink-0 bg-slate-300" aria-hidden="true" />
+              <div className="mt-16 h-[3px] w-6 shrink-0 bg-slate-500" aria-hidden="true" />
               <StaffBranch node={s} colorMap={colorMap} />
             </div>
           ))}
@@ -143,8 +143,8 @@ export default function OrgChart({
           <Tree
             key={root.id}
             label={<NodeLabel node={root} staff={staff} colorMap={colorMap} />}
-            lineWidth="2px"
-            lineColor="#cbd5e1"
+            lineWidth="3px"
+            lineColor="#64748b"
             lineBorderRadius="8px"
           >
             {renderChildren(line, colorMap)}
