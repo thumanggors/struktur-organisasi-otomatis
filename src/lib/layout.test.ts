@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CARD_H, CARD_W, cardsInRect, layoutChart, relayoutBranch, shiftSelected, EMPTY_MANUAL } from "./layout";
+import { CARD_H, CARD_W, cardsInRect, layoutChart, placeNewcomers, relayoutBranch, shiftSelected, EMPTY_MANUAL } from "./layout";
 import type { PersonNode } from "./tree";
 
 let seq = 0;
@@ -211,7 +211,7 @@ describe("layoutChart", () => {
     // two newcomers under Boss and one under a newcomer
     const nb = n("New B", [n("New C")]);
     boss.children.push(n("New A"), nb);
-    const l = layoutChart([root], manual);
+    const l = layoutChart([root], placeNewcomers([root], manual));
     expect(l.cards).toHaveLength(8);
     expect(overlapping(l.cards)).toEqual([]);
     // the saved cards stayed put
@@ -234,6 +234,17 @@ describe("layoutChart", () => {
     };
     const l = layoutChart([root], relayoutBranch([root], cramped, pm.id));
     expect(overlapping(l.cards)).toEqual([]);
+  });
+
+  it("moving one card on an unsaved (auto) chart leaves every other card where it was", () => {
+    const root = n("Dir", [n("A", [n("A1"), n("A2")]), n("B", [n("B1")]), n("C")]);
+    const auto = layoutChart([root]);
+    const moved = auto.cards[3];
+    const l = layoutChart([root], { ...EMPTY_MANUAL, pos: { [moved.node.id]: { x: moved.x + 400, y: moved.y + 96 } } });
+    for (const c of auto.cards) {
+      if (c.node.id === moved.node.id) continue;
+      expect(l.cards.find((x) => x.node.id === c.node.id)).toMatchObject({ x: c.x, y: c.y });
+    }
   });
 });
 

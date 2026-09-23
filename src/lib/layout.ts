@@ -226,8 +226,7 @@ export function freeSlot(start: Pos, others: Pos[]): Pos {
 
 /**
  * Positions every card and connector for `roots`. Cards in `manual.pos` keep
- * their saved spot; the rest use the auto layout.
- * ponytail: auto-placed newcomers can land on manually moved cards; the user drags them apart.
+ * their spot; the rest use the auto layout (see placeNewcomers for saved charts).
  */
 export function layoutChart(roots: PersonNode[], manual: ManualLayout = EMPTY_MANUAL): Layout {
   const edges: Edge[] = [];
@@ -239,21 +238,6 @@ export function layoutChart(roots: PersonNode[], manual: ManualLayout = EMPTY_MA
     x += sub.maxX - sub.minX + GAP_X;
   }
   for (const [id, p] of Object.entries(manual.pos)) if (all.pos.has(id)) all.pos.set(id, p);
-
-  // In a hand-arranged chart, people without a saved spot (newly added) go in the
-  // nearest free slot below their boss, so they never land on an existing card.
-  const placed = new Set(Object.keys(manual.pos).filter((id) => all.pos.has(id)));
-  if (placed.size > 0) {
-    const bossOf = new Map(edges.map((e) => [e.childId, e.parentId]));
-    for (const [id, autoPos] of all.pos) {
-      if (placed.has(id)) continue;
-      const boss = bossOf.get(id);
-      const b = boss && all.pos.get(boss);
-      const start = b ? { x: b.x, y: b.y + CARD_H + GAP_Y } : autoPos;
-      all.pos.set(id, freeSlot(start, [...placed].map((pid) => all.pos.get(pid)!)));
-      placed.add(id);
-    }
-  }
 
   const { lines, handles, sides } = route(all.pos, edges, manual);
   const nodes = new Map<string, PersonNode>();
@@ -350,4 +334,31 @@ export function relayoutBranch(roots: PersonNode[], manual: ManualLayout, id: st
   }
   for (const c of hit) taken.push((next.pos[c.node.id] = freeSlot(c, taken)));
   return next;
+}
+
+/**
+ * For a saved hand-arranged chart: people with no saved spot (added since the
+ * save) get the nearest free slot below their boss, so they never land on an
+ * existing card. Run once on load, not while editing, or every drag would
+ * reshuffle the cards that simply haven't been moved yet.
+ */
+export function placeNewcomers(roots: PersonNode[], manual: ManualLayout): ManualLayout {
+  const auto = layoutChart(roots);
+  const placedIds = auto.cards.filter((c) => manual.pos[c.node.id]).map((c) => c.node.id);
+  if (placedIds.length === 0 || placedIds.length === auto.cards.length) return manual;
+
+  const bossOf = new Map<string, string>();
+  const walk = (n: PersonNode) => n.children.forEach((c) => (bossOf.set(c.id, n.id), walk(c)));
+  roots.forEach(walk);
+
+  const pos = { ...manual.pos };
+  const taken = placedIds.map((id) => pos[id]);
+  for (const c of auto.cards) {
+    if (pos[c.node.id]) continue;
+    const boss = bossOf.get(c.node.id);
+    const b = boss && pos[boss];
+    const start = b ? { x: b.x, y: b.y + CARD_H + GAP_Y } : { x: c.x, y: c.y };
+    taken.push((pos[c.node.id] = freeSlot(start, taken)));
+  }
+  return { ...manual, pos };
 }
