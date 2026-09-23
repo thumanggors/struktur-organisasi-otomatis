@@ -1,9 +1,9 @@
 "use client";
 
-import { Tree, TreeNode } from "react-organizational-chart";
+import { useMemo } from "react";
 import { User } from "lucide-react";
 import type { PersonNode } from "@/lib/tree";
-import { splitStaff } from "@/lib/tree";
+import { CARD_H, CARD_W, layoutChart } from "@/lib/layout";
 import { divisiColorFor, type DivisiColorMap, type DivisiColorSet } from "@/lib/divisiColor";
 
 const NEUTRAL: DivisiColorSet = {
@@ -16,9 +16,12 @@ const NEUTRAL: DivisiColorSet = {
 function Card({ node, colorMap }: { node: PersonNode; colorMap: DivisiColorMap }) {
   const color = node.divisi ? divisiColorFor(colorMap, node.divisi) : NEUTRAL;
   return (
-    <div className="inline-flex min-w-[11rem] flex-col items-center overflow-hidden rounded-lg border border-slate-200 bg-white text-center shadow-sm">
+    <div
+      className="flex flex-col items-center overflow-hidden rounded-lg border border-slate-200 bg-white text-center shadow-sm"
+      style={{ width: CARD_W, height: CARD_H }}
+    >
       <div className={`h-1.5 w-full ${color.bg}`} aria-hidden="true" />
-      <div className="flex flex-col items-center gap-1 p-3" title={node.jobdesk || undefined}>
+      <div className="flex w-full flex-col items-center gap-1 p-3" title={node.jobdesk || undefined}>
         {node.fotoUrl ? (
           <img src={node.fotoUrl} alt={node.nama} className="h-14 w-14 rounded-full object-cover ring-2 ring-slate-100" />
         ) : (
@@ -26,92 +29,14 @@ function Card({ node, colorMap }: { node: PersonNode; colorMap: DivisiColorMap }
             <User className="h-6 w-6" aria-hidden="true" />
           </div>
         )}
-        <p className="font-semibold text-slate-900">{node.nama}</p>
-        <p className="text-sm text-slate-500">{node.jabatan}</p>
+        <p className="w-full truncate font-semibold text-slate-900" title={node.nama}>{node.nama}</p>
+        <p className="line-clamp-2 text-xs leading-4 text-slate-500">{node.jabatan}</p>
         {node.divisi && (
-          <span className={`mt-0.5 rounded-full px-2 py-0.5 text-xs font-medium ${color.badge}`}>{node.divisi}</span>
+          <span className={`mt-0.5 max-w-full truncate rounded-full px-2 py-0.5 text-xs font-medium ${color.badge}`}>{node.divisi}</span>
         )}
       </div>
     </div>
   );
-}
-
-/** A Wakil Direktur/Sekretaris and (if any) their own reports, still nested below them. */
-function StaffBranch({ node, colorMap }: { node: PersonNode; colorMap: DivisiColorMap }) {
-  if (node.children.length === 0) return <Card node={node} colorMap={colorMap} />;
-  return (
-    <Tree label={<Card node={node} colorMap={colorMap} />} lineWidth="3px" lineColor="#64748b" lineBorderRadius="8px">
-      {renderChildren(node.children, colorMap)}
-    </Tree>
-  );
-}
-
-/**
- * A node's own card, plus any staff positions (Wakil Direktur/Sekretaris)
- * hanging off a trunk that drops from the card and branches right. The
- * trunk (left grid column) stretches to match the staff column's real
- * height, so it's part of normal document flow — the "line" reports
- * below are correctly pushed down to make room, not overlapped.
- */
-function NodeLabel({
-  node,
-  staff,
-  colorMap,
-}: {
-  node: PersonNode;
-  staff: PersonNode[];
-  colorMap: DivisiColorMap;
-}) {
-  if (staff.length === 0) return <Card node={node} colorMap={colorMap} />;
-  return (
-    <div className="inline-flex flex-col items-center">
-      <Card node={node} colorMap={colorMap} />
-      {/* Equal side columns keep the trunk exactly under the card's center. */}
-      <div className="grid w-max grid-cols-[1fr_3px_1fr]">
-        <div aria-hidden="true" />
-        <div className="bg-slate-500" aria-hidden="true" />
-        <div className="flex flex-col gap-4 pt-4 pb-6">
-          {staff.map((s) => (
-            <div key={s.id} className="flex items-start">
-              {/* mt-16 ≈ half a card's height, so the tick meets the staff card itself, not its subtree. */}
-              <div className="mt-16 h-[3px] w-6 shrink-0 bg-slate-500" aria-hidden="true" />
-              <StaffBranch node={s} colorMap={colorMap} />
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function renderNode(node: PersonNode, colorMap: DivisiColorMap) {
-  const { staff, line } = splitStaff(node.children);
-  return (
-    <TreeNode key={node.id} label={<NodeLabel node={node} staff={staff} colorMap={colorMap} />}>
-      {renderChildren(line, colorMap)}
-    </TreeNode>
-  );
-}
-
-function renderChildren(children: PersonNode[], colorMap: DivisiColorMap) {
-  const allLeaves = children.every((c) => c.children.length === 0);
-
-  if (children.length > 3 && allLeaves) {
-    return (
-      <TreeNode
-        label={
-          // max-content columns: a 1fr grid shrinks to the parent's width and the cards overlap.
-          <div className="grid w-max grid-cols-[repeat(2,max-content)] gap-3">
-            {children.map((child) => (
-              <Card key={child.id} node={child} colorMap={colorMap} />
-            ))}
-          </div>
-        }
-      />
-    );
-  }
-
-  return children.map((child) => renderNode(child, colorMap));
 }
 
 export default function OrgChart({
@@ -125,6 +50,8 @@ export default function OrgChart({
   logoUrl?: string | null;
   colorMap: DivisiColorMap;
 }) {
+  const layout = useMemo(() => layoutChart(roots), [roots]);
+
   if (roots.length === 0) {
     return <p className="text-slate-500">Belum ada data orang.</p>;
   }
@@ -137,20 +64,18 @@ export default function OrgChart({
           {companyName && <h2 className="text-lg font-semibold text-slate-900">{companyName}</h2>}
         </div>
       )}
-      {roots.map((root) => {
-        const { staff, line } = splitStaff(root.children);
-        return (
-          <Tree
-            key={root.id}
-            label={<NodeLabel node={root} staff={staff} colorMap={colorMap} />}
-            lineWidth="3px"
-            lineColor="#64748b"
-            lineBorderRadius="8px"
-          >
-            {renderChildren(line, colorMap)}
-          </Tree>
-        );
-      })}
+      <div className="relative" style={{ width: layout.width, height: layout.height }}>
+        <svg className="absolute inset-0" width={layout.width} height={layout.height} aria-hidden="true">
+          {layout.lines.map((pts, i) => (
+            <polyline key={i} points={pts.join(" ")} fill="none" stroke="#64748b" strokeWidth={3} strokeLinecap="round" />
+          ))}
+        </svg>
+        {layout.cards.map(({ node, x, y }) => (
+          <div key={node.id} className="absolute" style={{ left: x, top: y }}>
+            <Card node={node} colorMap={colorMap} />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
