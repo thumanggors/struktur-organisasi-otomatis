@@ -3,12 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Network, GitBranch, Users, Menu, X } from "lucide-react";
+import { Network, GitBranch, Users, Settings, Menu, X } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/", label: "Struktur Organisasi", icon: Network, active: "bg-sky-600", idle: "text-sky-400" },
   { href: "/divisi", label: "Per Divisi", icon: GitBranch, active: "bg-violet-600", idle: "text-violet-400" },
   { href: "/orang", label: "Kelola Orang", icon: Users, active: "bg-emerald-600", idle: "text-emerald-400" },
+  { href: "/pengaturan", label: "Pengaturan", icon: Settings, active: "bg-amber-600", idle: "text-amber-400" },
 ];
 
 export default function Sidebar() {

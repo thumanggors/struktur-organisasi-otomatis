@@ -60,19 +60,32 @@ function renderChildren(children: PersonNode[]) {
   return children.map((child) => renderNode(child));
 }
 
-export default function OrgChart({ roots }: { roots: PersonNode[] }) {
+export default function OrgChart({
+  roots,
+  companyName,
+  logoUrl,
+}: {
+  roots: PersonNode[];
+  companyName?: string | null;
+  logoUrl?: string | null;
+}) {
   if (roots.length === 0) {
     return <p className="text-slate-500">Belum ada data orang.</p>;
   }
 
   return (
     <div id="org-chart-capture" className="inline-block bg-white p-4">
+      {(companyName || logoUrl) && (
+        <div className="mb-6 flex flex-col items-center gap-2 border-b border-slate-100 pb-4">
+          {logoUrl && <img src={logoUrl} alt={companyName ?? "Logo perusahaan"} className="h-16 w-16 object-contain" />}
+          {companyName && <h2 className="text-lg font-semibold text-slate-900">{companyName}</h2>}
+        </div>
+      )}
       {roots.map((root) => (
         <Tree key={root.id} label={<Card node={root} />} lineWidth="2px" lineColor="#cbd5e1" lineBorderRadius="8px">
           {renderChildren(root.children)}
         </Tree>
       ))}
-      <p className="mt-4 text-right text-xs text-slate-300">by. Pictor R. Tumanggor</p>
     </div>
   );
 }

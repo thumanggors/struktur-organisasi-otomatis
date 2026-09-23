@@ -7,6 +7,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Settings {
+  id          String  @id @default("settings")
+  companyName String?
+  logoUrl     String?
+}
+
 model Person {
   id        String   @id @default(cuid())
   nama      String

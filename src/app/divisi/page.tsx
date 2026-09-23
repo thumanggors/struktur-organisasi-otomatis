@@ -2,6 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { buildTree, listDivisi, withAncestors } from "@/lib/tree";
 import { divisiColor } from "@/lib/divisiColor";
+import { getSettings } from "@/lib/settings";
 import OrgChart from "@/components/OrgChartLazy";
 import ExportButtons from "@/components/ExportButtonsLazy";
 
@@ -13,7 +14,7 @@ export default async function DivisiPage({
   searchParams: Promise<{ divisi?: string }>;
 }) {
   const { divisi } = await searchParams;
-  const people = await db.person.findMany();
+  const [people, settings] = await Promise.all([db.person.findMany(), getSettings()]);
   const divisiList = listDivisi(people);
 
   const roots = divisi ? buildTree(withAncestors(people, divisi)) : [];
@@ -56,7 +57,7 @@ export default async function DivisiPage({
         <div className="mt-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
           <ExportButtons />
           <div className="overflow-auto">
-            <OrgChart roots={roots} />
+            <OrgChart roots={roots} companyName={settings?.companyName} logoUrl={settings?.logoUrl} />
           </div>
         </div>
       )}
