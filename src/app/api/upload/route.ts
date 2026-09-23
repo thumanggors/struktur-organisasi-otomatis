@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
+import { put } from "@vercel/blob";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png"];
 const MAX_SIZE = 5 * 1024 * 1024;
@@ -19,13 +18,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Ukuran file maksimal 5MB" }, { status: 400 });
   }
 
-  const uploadsDir = path.join(process.cwd(), "uploads");
-  await mkdir(uploadsDir, { recursive: true });
-
   const ext = file.type === "image/png" ? "png" : "jpg";
   const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
-  await writeFile(path.join(uploadsDir, filename), buffer);
+  await put(filename, file, { access: "public", contentType: file.type, addRandomSuffix: false });
 
   return NextResponse.json({ url: `/api/photos/${filename}` }, { status: 201 });
 }

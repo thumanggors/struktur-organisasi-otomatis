@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readFile } from "fs/promises";
-import path from "path";
+import { get } from "@vercel/blob";
 
 const CONTENT_TYPES: Record<string, string> = {
   jpg: "image/jpeg",
@@ -18,17 +17,15 @@ export async function GET(
   }
 
   const ext = filename.split(".").pop()!;
-  const filePath = path.join(process.cwd(), "uploads", filename);
-
-  try {
-    const buffer = await readFile(filePath);
-    return new NextResponse(new Uint8Array(buffer), {
-      headers: {
-        "Content-Type": CONTENT_TYPES[ext],
-        "Cache-Control": "public, max-age=31536000, immutable",
-      },
-    });
-  } catch {
+  const result = await get(filename, { access: "public" }).catch(() => null);
+  if (result?.statusCode !== 200) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+
+  return new NextResponse(result.stream, {
+    headers: {
+      "Content-Type": CONTENT_TYPES[ext],
+      "Cache-Control": "public, max-age=31536000, immutable",
+    },
+  });
 }
