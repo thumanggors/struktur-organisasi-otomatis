@@ -43,22 +43,30 @@ function StaffBranch({ node }: { node: PersonNode }) {
   );
 }
 
-/** A node's own card, plus any staff positions branching off to its right. */
+/**
+ * A node's own card, plus any staff positions (Wakil Direktur/Sekretaris)
+ * hanging off a trunk that drops from the card and branches right. The
+ * trunk (left grid column) stretches to match the staff column's real
+ * height, so it's part of normal document flow — the "line" reports
+ * below are correctly pushed down to make room, not overlapped.
+ */
 function NodeLabel({ node, staff }: { node: PersonNode; staff: PersonNode[] }) {
   if (staff.length === 0) return <Card node={node} />;
   return (
-    <div className="flex items-start">
+    <div className="inline-flex flex-col items-center">
       <Card node={node} />
-      <div className="ml-3 flex flex-col justify-center gap-3 self-center border-l-2 border-slate-300 pl-3">
-        {staff.map((s) => (
-          <div key={s.id} className="relative">
-            <div
-              className="absolute top-1/2 -left-3 h-0.5 w-3 -translate-y-1/2 bg-slate-300"
-              aria-hidden="true"
-            />
-            <StaffBranch node={s} />
-          </div>
-        ))}
+      <div className="grid grid-cols-[auto_1fr]">
+        <div className="mx-auto w-0.5 bg-slate-300" aria-hidden="true" />
+        <div className="flex flex-col justify-center gap-3 py-2">
+          {staff.map((s) => (
+            <div key={s.id} className="relative flex items-center">
+              <div className="absolute top-1/2 -left-5 h-0.5 w-5 -translate-y-1/2 bg-slate-300" aria-hidden="true" />
+              <div className="pl-5">
+                <StaffBranch node={s} />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
