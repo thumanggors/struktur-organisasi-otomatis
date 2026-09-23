@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Move, Save, X, RotateCcw } from "lucide-react";
 import OrgChart from "@/components/OrgChartLazy";
 import ZoomableChart from "@/components/ZoomableChart";
-import { layoutChart, type ManualLayout } from "@/lib/layout";
+import { EMPTY_MANUAL, layoutChart, type ManualLayout } from "@/lib/layout";
 import type { PersonNode } from "@/lib/tree";
 import type { DivisiColorMap } from "@/lib/divisiColor";
 
@@ -52,14 +52,22 @@ export default function EditableOrgChart({
 
   function save() {
     // Snapshot every card, so auto-placed ones stay put next time too.
-    const { cards } = layoutChart(roots, draft!);
-    const items = cards.map((c) => ({ id: c.node.id, posX: c.x, posY: c.y, busY: draft!.busY[c.node.id] ?? null }));
+    const d = draft!;
+    const { cards } = layoutChart(roots, d);
+    const items = cards.map(({ node: { id }, x, y }) => ({
+      id,
+      posX: x,
+      posY: y,
+      busY: d.busY[id] ?? null,
+      trunkX: d.trunkX[id] ?? null,
+      linkOff: d.linkOff[id] ?? null,
+    }));
     const pos = Object.fromEntries(cards.map((c) => [c.node.id, { x: c.x, y: c.y }]));
-    send("PUT", { pos, busY: draft!.busY }, { items });
+    send("PUT", { ...d, pos }, { items });
   }
 
   function reset() {
-    if (confirm("Kembalikan semua posisi ke tata letak otomatis?")) send("DELETE", { pos: {}, busY: {} });
+    if (confirm("Kembalikan semua posisi ke tata letak otomatis?")) send("DELETE", EMPTY_MANUAL);
   }
 
   return (
@@ -82,7 +90,7 @@ export default function EditableOrgChart({
             <span className="text-sm text-slate-500">
               {selected.size > 0
                 ? `${selected.size} kartu terblok — geser salah satunya untuk memindahkan semuanya. Klik area kosong atau Esc untuk batal.`
-                : "Geser kartu, atau titik biru pada garis untuk mengubah tinggi garis. Tarik di area kosong (atau tekan lama lalu tarik) untuk memblok beberapa kartu."}
+                : "Geser kartu, atau garis mana pun (titik biru muncul saat diarahkan). Tarik di area kosong (atau tekan lama lalu tarik) untuk memblok beberapa kartu."}
             </span>
           </>
         ) : (
@@ -101,7 +109,7 @@ export default function EditableOrgChart({
           colorMap={colorMap}
           manual={draft ?? committed ?? saved}
           onMoveCard={draft ? (id, p) => setDraft((d) => d && { ...d, pos: { ...d.pos, [id]: p } }) : undefined}
-          onMoveBus={draft ? (id, y) => setDraft((d) => d && { ...d, busY: { ...d.busY, [id]: y } }) : undefined}
+          onMoveLine={draft ? (prop, id, v) => setDraft((d) => d && { ...d, [prop]: { ...d[prop], [id]: v } }) : undefined}
           selected={draft ? selected : undefined}
           onSelect={setSelected}
           onReplace={setDraft}

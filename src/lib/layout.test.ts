@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CARD_H, CARD_W, cardsInRect, layoutChart, shiftSelected } from "./layout";
+import { CARD_H, CARD_W, cardsInRect, layoutChart, shiftSelected, EMPTY_MANUAL } from "./layout";
 import type { PersonNode } from "./tree";
 
 let seq = 0;
@@ -51,7 +51,7 @@ describe("layoutChart", () => {
   it("keeps manually placed cards and routes lines to them", () => {
     const b = n("B");
     const root = n("A", [b, n("C")]);
-    const { cards, lines } = layoutChart([root], { pos: { [b.id]: { x: 1000, y: 700 } }, busY: {} });
+    const { cards, lines } = layoutChart([root], { ...EMPTY_MANUAL, pos: { [b.id]: { x: 1000, y: 700 } } });
     expect(cards.find((c) => c.node.id === b.id)).toMatchObject({ x: 1000, y: 700 });
     // a drop line lands on B's top-center
     expect(lines.some((l) => l.at(-1)![0] === 1000 + CARD_W / 2 && l.at(-1)![1] === 700)).toBe(true);
@@ -59,8 +59,8 @@ describe("layoutChart", () => {
 
   it("uses a saved bus height for that parent", () => {
     const root = n("A", [n("B"), n("C")]);
-    const { buses } = layoutChart([root], { pos: {}, busY: { [root.id]: 222 } });
-    expect(buses).toEqual([expect.objectContaining({ parentId: root.id, y: 222 })]);
+    const { handles } = layoutChart([root], { ...EMPTY_MANUAL, busY: { [root.id]: 222 } });
+    expect(handles.filter((h) => h.prop === "busY")).toEqual([expect.objectContaining({ id: root.id, y1: 222 })]);
   });
 
   it("cardsInRect picks only cards touching the box, whichever way it was dragged", () => {
@@ -75,16 +75,41 @@ describe("layoutChart", () => {
     const b = n("B", [n("D"), n("E")]);
     const root = n("A", [b, n("C")]);
     const base = layoutChart([root]);
-    const moved = layoutChart([root], shiftSelected(base, new Set([b.id]), 40, 16));
+    const moved = layoutChart([root], shiftSelected(base, EMPTY_MANUAL, new Set([b.id]), 40, 16));
     for (const c of base.cards) {
       const m = moved.cards.find((x) => x.node.id === c.node.id)!;
       expect(m).toMatchObject(c.node.id === b.id ? { x: c.x + 40, y: c.y + 16 } : { x: c.x, y: c.y });
     }
-    const busOf = (l: typeof base, id: string) => l.buses.find((x) => x.parentId === id)!.y;
+    const busOf = (l: typeof base, id: string) => l.handles.find((h) => h.prop === "busY" && h.id === id)!.y1;
     expect(busOf(moved, b.id)).toBe(busOf(base, b.id) + 16);
     expect(busOf(moved, root.id)).toBe(busOf(base, root.id));
     // clamped at the origin
-    const clamped = layoutChart([root], shiftSelected(base, new Set([root.id]), 0, -9999));
+    const clamped = layoutChart([root], shiftSelected(base, EMPTY_MANUAL, new Set([root.id]), 0, -9999));
     expect(clamped.cards.find((x) => x.node.id === root.id)!.y).toBe(0);
+  });
+
+  it("line tweaks are card-relative, clamped inside the card, and follow a moved card", () => {
+    const b = n("B"), c = n("C");
+    const root = n("A", [b, c]);
+    const manual = { ...EMPTY_MANUAL, trunkX: { [root.id]: 40 }, linkOff: { [b.id]: 9999 } };
+    const l = layoutChart([root], manual);
+    const card = (id: string) => l.cards.find((x) => x.node.id === id)!;
+    const trunk = l.handles.find((h) => h.prop === "trunkX")!;
+    expect(trunk.x1).toBe(card(root.id).x + 40);
+    const drop = l.handles.find((h) => h.prop === "linkOff" && h.id === b.id)!;
+    expect(drop.x1).toBe(card(b.id).x + CARD_W - 16); // clamped to the card edge margin
+    expect(drop.y2).toBe(card(b.id).y); // still lands on B's top
+
+    const moved = layoutChart([root], { ...manual, pos: { [b.id]: { x: 900, y: 600 } } });
+    expect(moved.handles.find((h) => h.prop === "linkOff" && h.id === b.id)!.x1).toBe(900 + CARD_W - 16);
+  });
+
+  it("side ticks move along the card's height", () => {
+    const s = n("Sekretaris");
+    const root = n("Direktur", [s]);
+    const l = layoutChart([root], { ...EMPTY_MANUAL, linkOff: { [s.id]: 30 } });
+    const tick = l.handles.find((h) => h.id === s.id)!;
+    expect(tick.axis).toBe("y");
+    expect(tick.y1).toBe(l.cards.find((x) => x.node.id === s.id)!.y + 30);
   });
 });

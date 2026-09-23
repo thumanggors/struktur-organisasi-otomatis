@@ -14,12 +14,38 @@ export type Point = [number, number];
 /** "side": ticked onto the parent's trunk (staff, leaf grid). "bus": hangs from the horizontal bus below the parent. */
 export type LinkKind = "side" | "bus";
 export type Edge = { parentId: string; childId: string; kind: LinkKind };
-export type ManualLayout = { pos: Record<string, Pos>; busY: Record<string, number> };
+/**
+ * Saved hand edits. Line tweaks are stored relative to the card they attach to,
+ * so they travel with it: `trunkX` is the parent's trunk x from its card's left;
+ * `linkOff` is where a report's own connector meets its card (x from the left
+ * for a bus drop, y from the top for a side tick). `busY` is absolute.
+ */
+export type ManualLayout = {
+  pos: Record<string, Pos>;
+  busY: Record<string, number>;
+  trunkX: Record<string, number>;
+  linkOff: Record<string, number>;
+};
+export const EMPTY_MANUAL: ManualLayout = { pos: {}, busY: {}, trunkX: {}, linkOff: {} };
+
+/** A draggable line segment; dragging along `axis` sets `prop[id]` to (coordinate - origin), clamped to [min, max]. */
+export type LineHandle = {
+  prop: "busY" | "trunkX" | "linkOff";
+  id: string;
+  axis: "x" | "y";
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  origin: number;
+  min: number;
+  max: number;
+};
+
 export type Layout = {
   cards: { node: PersonNode; x: number; y: number }[];
   lines: Point[][];
-  /** Draggable bus segments: y plus the x-span, keyed by parent id. */
-  buses: { parentId: string; y: number; x1: number; x2: number }[];
+  handles: LineHandle[];
   width: number;
   height: number;
 };
@@ -79,43 +105,65 @@ function layoutNode(node: PersonNode, edges: Edge[]): Sub {
   return out;
 }
 
+const ATTACH_MARGIN = 16; // keep connectors this far inside a card's edge
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
 /** Orthogonal connectors derived from final card positions, so they always follow the cards. */
-function route(pos: Map<string, Pos>, edges: Edge[], busOverride: Record<string, number>) {
+function route(pos: Map<string, Pos>, edges: Edge[], manual: ManualLayout) {
   const lines: Point[][] = [];
-  const buses: Layout["buses"] = [];
+  const handles: LineHandle[] = [];
   const byParent = new Map<string, Edge[]>();
   for (const e of edges) byParent.set(e.parentId, [...(byParent.get(e.parentId) ?? []), e]);
+  // Where a connector meets a card along one side of length `len`.
+  const along = (id: string, start: number, len: number) =>
+    start + clamp(manual.linkOff[id] ?? len / 2, ATTACH_MARGIN, len - ATTACH_MARGIN);
 
   for (const [parentId, kids] of byParent) {
     const p = pos.get(parentId)!;
-    const tx = p.x + CARD_W / 2; // trunk x
+    const tx = p.x + clamp(manual.trunkX[parentId] ?? CARD_W / 2, ATTACH_MARGIN, CARD_W - ATTACH_MARGIN);
     const bottom = p.y + CARD_H;
     let trunkEnd = bottom;
 
     for (const e of kids.filter((k) => k.kind === "side")) {
       const c = pos.get(e.childId)!;
-      const cy = c.y + CARD_H / 2;
+      const cy = along(e.childId, c.y, CARD_H);
       const edgeX = c.x + CARD_W / 2 >= tx ? c.x : c.x + CARD_W;
       lines.push([[tx, cy], [edgeX, cy]]);
+      handles.push({
+        prop: "linkOff", id: e.childId, axis: "y", x1: tx, y1: cy, x2: edgeX, y2: cy,
+        origin: c.y, min: c.y + ATTACH_MARGIN, max: c.y + CARD_H - ATTACH_MARGIN,
+      });
       trunkEnd = Math.max(trunkEnd, cy);
     }
 
-    const bus = kids.filter((k) => k.kind === "bus").map((k) => pos.get(k.childId)!);
+    const bus = kids.filter((k) => k.kind === "bus").map((k) => ({ id: k.childId, c: pos.get(k.childId)! }));
     if (bus.length > 0) {
-      const autoY = Math.max(bottom + 12, Math.min(...bus.map((c) => c.y)) - GAP_Y / 2);
-      const y = busOverride[parentId] ?? autoY;
-      const centers = bus.map((c) => c.x + CARD_W / 2);
-      const x1 = Math.min(tx, ...centers);
-      const x2 = Math.max(tx, ...centers);
-      for (const c of bus) lines.push([[c.x + CARD_W / 2, y], [c.x + CARD_W / 2, c.y]]);
+      const autoY = Math.max(bottom + 12, Math.min(...bus.map((b) => b.c.y)) - GAP_Y / 2);
+      const y = manual.busY[parentId] ?? autoY;
+      const drops = bus.map((b) => along(b.id, b.c.x, CARD_W));
+      bus.forEach((b, i) => {
+        lines.push([[drops[i], y], [drops[i], b.c.y]]);
+        handles.push({
+          prop: "linkOff", id: b.id, axis: "x", x1: drops[i], y1: y, x2: drops[i], y2: b.c.y,
+          origin: b.c.x, min: b.c.x + ATTACH_MARGIN, max: b.c.x + CARD_W - ATTACH_MARGIN,
+        });
+      });
+      const x1 = Math.min(tx, ...drops);
+      const x2 = Math.max(tx, ...drops);
       lines.push([[x1, y], [x2, y]]);
-      buses.push({ parentId, y, x1, x2 });
+      handles.push({ prop: "busY", id: parentId, axis: "y", x1, y1: y, x2, y2: y, origin: 0, min: 0, max: Infinity });
       trunkEnd = Math.max(trunkEnd, y);
     }
 
-    if (trunkEnd > bottom) lines.unshift([[tx, bottom], [tx, trunkEnd]]);
+    if (trunkEnd > bottom) {
+      lines.unshift([[tx, bottom], [tx, trunkEnd]]);
+      handles.push({
+        prop: "trunkX", id: parentId, axis: "x", x1: tx, y1: bottom, x2: tx, y2: trunkEnd,
+        origin: p.x, min: p.x + ATTACH_MARGIN, max: p.x + CARD_W - ATTACH_MARGIN,
+      });
+    }
   }
-  return { lines, buses };
+  return { lines, handles };
 }
 
 /**
@@ -123,7 +171,7 @@ function route(pos: Map<string, Pos>, edges: Edge[], busOverride: Record<string,
  * their saved spot; the rest use the auto layout.
  * ponytail: auto-placed newcomers can land on manually moved cards; the user drags them apart.
  */
-export function layoutChart(roots: PersonNode[], manual: ManualLayout = { pos: {}, busY: {} }): Layout {
+export function layoutChart(roots: PersonNode[], manual: ManualLayout = EMPTY_MANUAL): Layout {
   const edges: Edge[] = [];
   const all: Sub = { pos: new Map(), minX: 0, maxX: 0, height: 0 };
   let x = 0;
@@ -134,16 +182,16 @@ export function layoutChart(roots: PersonNode[], manual: ManualLayout = { pos: {
   }
   for (const [id, p] of Object.entries(manual.pos)) if (all.pos.has(id)) all.pos.set(id, p);
 
-  const { lines, buses } = route(all.pos, edges, manual.busY);
+  const { lines, handles } = route(all.pos, edges, manual);
   const nodes = new Map<string, PersonNode>();
   const walk = (n: PersonNode) => (nodes.set(n.id, n), n.children.forEach(walk));
   roots.forEach(walk);
 
   const cards = [...all.pos].map(([id, p]) => ({ node: nodes.get(id)!, ...p }));
-  if (cards.length === 0) return { cards, lines, buses, width: 0, height: 0 };
-  const width = Math.max(...cards.map((c) => c.x + CARD_W), ...buses.map((b) => b.x2));
-  const height = Math.max(...cards.map((c) => c.y + CARD_H), ...buses.map((b) => b.y));
-  return { cards, lines, buses, width, height };
+  if (cards.length === 0) return { cards, lines, handles, width: 0, height: 0 };
+  const width = Math.max(...cards.map((c) => c.x + CARD_W), ...handles.map((h) => Math.max(h.x1, h.x2)));
+  const height = Math.max(...cards.map((c) => c.y + CARD_H), ...handles.map((h) => Math.max(h.y1, h.y2)));
+  return { cards, lines, handles, width, height };
 }
 
 export type Rect = { x1: number; y1: number; x2: number; y2: number };
@@ -160,17 +208,21 @@ export function cardsInRect(layout: Layout, r: Rect): string[] {
 /**
  * Moves the selected cards (and the bus lines they own) by (dx, dy), as a full
  * manual snapshot so unselected cards stay exactly where they are. The shift is
- * clamped so the selection can't go left of / above the origin.
+ * clamped so the selection can't go left of / above the origin. Card-relative
+ * line tweaks in `manual` ride along unchanged.
  */
-export function shiftSelected(layout: Layout, ids: Set<string>, dx: number, dy: number): ManualLayout {
+export function shiftSelected(layout: Layout, manual: ManualLayout, ids: Set<string>, dx: number, dy: number): ManualLayout {
   const sel = layout.cards.filter((c) => ids.has(c.node.id));
-  if (sel.length === 0) return { pos: {}, busY: {} };
+  if (sel.length === 0) return manual;
   const sx = Math.max(dx, -Math.min(...sel.map((c) => c.x)));
   const sy = Math.max(dy, -Math.min(...sel.map((c) => c.y)));
   return {
+    ...manual,
     pos: Object.fromEntries(
       layout.cards.map((c) => [c.node.id, ids.has(c.node.id) ? { x: c.x + sx, y: c.y + sy } : { x: c.x, y: c.y }])
     ),
-    busY: Object.fromEntries(layout.buses.map((b) => [b.parentId, ids.has(b.parentId) ? b.y + sy : b.y])),
+    busY: Object.fromEntries(
+      layout.handles.filter((h) => h.prop === "busY").map((h) => [h.id, ids.has(h.id) ? h.y1 + sy : h.y1])
+    ),
   };
 }

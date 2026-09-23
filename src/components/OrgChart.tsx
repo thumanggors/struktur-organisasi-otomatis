@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { User } from "lucide-react";
 import type { PersonNode } from "@/lib/tree";
-import { CARD_H, CARD_W, cardsInRect, layoutChart, shiftSelected, type ManualLayout, type Pos, type Rect } from "@/lib/layout";
+import { CARD_H, CARD_W, cardsInRect, layoutChart, shiftSelected, EMPTY_MANUAL, type LineHandle, type ManualLayout, type Pos, type Rect } from "@/lib/layout";
 import { divisiColorFor, type DivisiColorMap, type DivisiColorSet } from "@/lib/divisiColor";
 
 const LONG_PRESS = 500; // ms
@@ -48,7 +48,7 @@ export default function OrgChart({
   colorMap,
   manual,
   onMoveCard,
-  onMoveBus,
+  onMoveLine,
   selected,
   onSelect,
   onReplace,
@@ -60,7 +60,7 @@ export default function OrgChart({
   manual?: ManualLayout;
   /** Passing these turns on edit mode: cards and bus lines become draggable. */
   onMoveCard?: (id: string, pos: Pos) => void;
-  onMoveBus?: (parentId: string, y: number) => void;
+  onMoveLine?: (prop: LineHandle["prop"], id: string, value: number) => void;
   /** Box-selected cards; dragging any of them moves the whole selection. */
   selected?: Set<string>;
   onSelect?: (ids: Set<string>) => void;
@@ -119,7 +119,7 @@ export default function OrgChart({
       if (!moved && Math.hypot(dx, dy) < 6) return;
       moved = true;
       if (boxing) setBox({ x1: start.x, y1: start.y, x2: p.x, y2: p.y });
-      else if (group) onReplace?.(shiftSelected(base, group, snap(dx), snap(dy)));
+      else if (group) onReplace?.(shiftSelected(base, manual ?? EMPTY_MANUAL, group, snap(dx), snap(dy)));
       else if (single) single.apply({ x: Math.max(0, snap(single.from.x + dx)), y: Math.max(0, snap(single.from.y + dy)) });
     };
     const up = (ev: PointerEvent) => {
@@ -186,19 +186,38 @@ export default function OrgChart({
           </div>
         ))}
         {editing &&
-          onMoveBus &&
-          layout.buses.map((b) => (
-            <div
-              key={b.parentId}
-              title="Geser untuk mengubah tinggi garis"
-              className="group absolute flex cursor-ns-resize items-center justify-center"
-              style={{ left: b.x1, top: b.y - 8, width: Math.max(b.x2 - b.x1, 24), height: 16, touchAction: "none" }}
-              onPointerDown={(e) => gesture(e, { from: { x: b.x1, y: b.y }, apply: (p) => onMoveBus(b.parentId, p.y) })}
-            >
-              <div className="h-1 w-full rounded bg-sky-400/0 group-hover:bg-sky-400/60" />
-              <div className="absolute h-3.5 w-3.5 rounded-full border-2 border-white bg-sky-500 shadow" />
-            </div>
-          ))}
+          onMoveLine &&
+          layout.handles.map((h) => {
+            const horizontal = h.y1 === h.y2;
+            const [left, top] = [Math.min(h.x1, h.x2), Math.min(h.y1, h.y2)];
+            const [w, ht] = [Math.abs(h.x2 - h.x1), Math.abs(h.y2 - h.y1)];
+            const setAt = (v: number) => onMoveLine(h.prop, h.id, Math.min(h.max, Math.max(h.min, v)) - h.origin);
+            return (
+              <div
+                key={`${h.prop}-${h.id}`}
+                title={horizontal ? "Geser naik/turun" : "Geser kiri/kanan"}
+                className={`group absolute flex items-center justify-center ${horizontal ? "cursor-ns-resize" : "cursor-ew-resize"}`}
+                style={
+                  horizontal
+                    ? { left, top: top - 6, width: Math.max(w, 12), height: 12, touchAction: "none" }
+                    : { left: left - 6, top, width: 12, height: Math.max(ht, 12), touchAction: "none" }
+                }
+                onPointerDown={(e) =>
+                  gesture(e, {
+                    from: { x: h.x1, y: h.y1 },
+                    apply: (p) => setAt(h.axis === "x" ? p.x : p.y),
+                  })
+                }
+              >
+                <div className={`rounded bg-sky-400/0 group-hover:bg-sky-400/60 ${horizontal ? "h-1 w-full" : "h-full w-1"}`} />
+                <div
+                  className={`absolute h-3 w-3 rounded-full border-2 border-white bg-sky-500 shadow ${
+                    h.prop === "busY" ? "" : "opacity-0 group-hover:opacity-100"
+                  }`}
+                />
+              </div>
+            );
+          })}
         {box && (
           <div
             className="pointer-events-none absolute rounded border-2 border-dashed border-sky-500 bg-sky-400/10"

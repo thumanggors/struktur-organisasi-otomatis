@@ -3,7 +3,7 @@ import { buildTree, listDivisi } from "@/lib/tree";
 import { divisiColorMap } from "@/lib/divisiColor";
 import { getSettings } from "@/lib/settings";
 import EditableOrgChart from "@/components/EditableOrgChart";
-import type { ManualLayout } from "@/lib/layout";
+import { EMPTY_MANUAL, type ManualLayout } from "@/lib/layout";
 import ExportButtons from "@/components/ExportButtonsLazy";
 
 export const dynamic = "force-dynamic";
@@ -12,10 +12,12 @@ export default async function HomePage() {
   const [people, settings] = await Promise.all([db.person.findMany(), getSettings()]);
   const roots = buildTree(people);
   const colorMap = divisiColorMap(listDivisi(people));
-  const saved: ManualLayout = { pos: {}, busY: {} };
+  const saved: ManualLayout = structuredClone(EMPTY_MANUAL);
   for (const p of people) {
     if (p.posX !== null && p.posY !== null) saved.pos[p.id] = { x: p.posX, y: p.posY };
     if (p.busY !== null) saved.busY[p.id] = p.busY;
+    if (p.trunkX !== null) saved.trunkX[p.id] = p.trunkX;
+    if (p.linkOff !== null) saved.linkOff[p.id] = p.linkOff;
   }
 
   return (

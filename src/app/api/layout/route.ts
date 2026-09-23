@@ -1,26 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
-type Item = { id: string; posX: number; posY: number; busY: number | null };
+const LINE_FIELDS = ["busY", "trunkX", "linkOff"] as const;
+type Item = { id: string; posX: number; posY: number } & Record<(typeof LINE_FIELDS)[number], number | null>;
 
 const num = (v: unknown) => typeof v === "number" && Number.isFinite(v);
+const valid = (i: Item) =>
+  typeof i?.id === "string" && num(i.posX) && num(i.posY) && LINE_FIELDS.every((f) => i[f] === null || num(i[f]));
 
-/** Saves a full snapshot of manual chart positions. */
+/** Saves a full snapshot of manual chart positions and line tweaks. */
 export async function PUT(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const items: unknown = body?.items;
-  if (
-    !Array.isArray(items) ||
-    !items.every(
-      (i: Item) => typeof i?.id === "string" && num(i.posX) && num(i.posY) && (i.busY === null || num(i.busY))
-    )
-  ) {
+  if (!Array.isArray(items) || !items.every(valid)) {
     return NextResponse.json({ error: "Data tata letak tidak valid" }, { status: 400 });
   }
 
   await db.$transaction(
-    (items as Item[]).map((i) =>
-      db.person.updateMany({ where: { id: i.id }, data: { posX: i.posX, posY: i.posY, busY: i.busY } })
+    (items as Item[]).map(({ id, posX, posY, busY, trunkX, linkOff }) =>
+      db.person.updateMany({ where: { id }, data: { posX, posY, busY, trunkX, linkOff } })
     )
   );
   return NextResponse.json({ ok: true });
@@ -28,6 +26,6 @@ export async function PUT(req: NextRequest) {
 
 /** Back to the automatic layout. */
 export async function DELETE() {
-  await db.person.updateMany({ data: { posX: null, posY: null, busY: null } });
+  await db.person.updateMany({ data: { posX: null, posY: null, busY: null, trunkX: null, linkOff: null } });
   return NextResponse.json({ ok: true });
 }
