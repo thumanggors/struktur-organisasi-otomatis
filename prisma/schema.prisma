@@ -22,6 +22,10 @@ model Person {
   jobdesk   String?
   fotoUrl   String?
   atasanId  String?
+  /// Manual chart layout (card top-left and this person's bus line y); null = auto layout.
+  posX      Float?
+  posY      Float?
+  busY      Float?
   atasan    Person?  @relation("Reports", fields: [atasanId], references: [id])
   bawahan   Person[] @relation("Reports")
   createdAt DateTime @default(now())

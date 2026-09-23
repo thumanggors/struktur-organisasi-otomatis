@@ -47,4 +47,19 @@ describe("layoutChart", () => {
     expect(Math.min(...cards.map((c) => c.x))).toBe(0);
     expect(width).toBeGreaterThanOrEqual(2 * CARD_W);
   });
+
+  it("keeps manually placed cards and routes lines to them", () => {
+    const b = n("B");
+    const root = n("A", [b, n("C")]);
+    const { cards, lines } = layoutChart([root], { pos: { [b.id]: { x: 1000, y: 700 } }, busY: {} });
+    expect(cards.find((c) => c.node.id === b.id)).toMatchObject({ x: 1000, y: 700 });
+    // a drop line lands on B's top-center
+    expect(lines.some((l) => l.at(-1)![0] === 1000 + CARD_W / 2 && l.at(-1)![1] === 700)).toBe(true);
+  });
+
+  it("uses a saved bus height for that parent", () => {
+    const root = n("A", [n("B"), n("C")]);
+    const { buses } = layoutChart([root], { pos: {}, busY: { [root.id]: 222 } });
+    expect(buses).toEqual([expect.objectContaining({ parentId: root.id, y: 222 })]);
+  });
 });

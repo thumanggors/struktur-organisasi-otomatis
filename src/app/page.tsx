@@ -2,9 +2,9 @@ import { db } from "@/lib/db";
 import { buildTree, listDivisi } from "@/lib/tree";
 import { divisiColorMap } from "@/lib/divisiColor";
 import { getSettings } from "@/lib/settings";
-import OrgChart from "@/components/OrgChartLazy";
+import EditableOrgChart from "@/components/EditableOrgChart";
+import type { ManualLayout } from "@/lib/layout";
 import ExportButtons from "@/components/ExportButtonsLazy";
-import ZoomableChart from "@/components/ZoomableChart";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +12,11 @@ export default async function HomePage() {
   const [people, settings] = await Promise.all([db.person.findMany(), getSettings()]);
   const roots = buildTree(people);
   const colorMap = divisiColorMap(listDivisi(people));
+  const saved: ManualLayout = { pos: {}, busY: {} };
+  for (const p of people) {
+    if (p.posX !== null && p.posY !== null) saved.pos[p.id] = { x: p.posX, y: p.posY };
+    if (p.busY !== null) saved.busY[p.id] = p.busY;
+  }
 
   return (
     <div className="p-6 md:p-8">
@@ -20,9 +25,13 @@ export default async function HomePage() {
 
       <div className="mt-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
         <ExportButtons />
-        <ZoomableChart>
-          <OrgChart roots={roots} companyName={settings?.companyName} logoUrl={settings?.logoUrl} colorMap={colorMap} />
-        </ZoomableChart>
+        <EditableOrgChart
+          roots={roots}
+          saved={saved}
+          companyName={settings?.companyName}
+          logoUrl={settings?.logoUrl}
+          colorMap={colorMap}
+        />
       </div>
     </div>
   );
