@@ -2,21 +2,22 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a standalone Next.js web app where an Admin inputs people (Nama, Jabatan, Divisi, Foto, Jobdesk, Atasan) and a Viewer/Admin sees an auto-generated, exportable org chart.
+**Goal:** Build a standalone Next.js web app, open to anyone (no login), where people are input (Nama, Jabatan, Divisi, Foto, Jobdesk, Atasan) and an auto-generated, exportable org chart is shown.
 
-**Architecture:** Next.js 14+ App Router (TypeScript) monolith — API routes for data access, Prisma/SQLite for storage, NextAuth credentials auth with role-based session, React components rendering the org tree client-side from a flat `Person[]` list, export via `html-to-image` + `jsPDF`.
+**Architecture:** Next.js 14+ App Router (TypeScript) monolith — API routes for data access, Prisma/SQLite for storage, no authentication (all routes and endpoints open), React components rendering the org tree client-side from a flat `Person[]` list, export via `html-to-image` + `jsPDF`.
 
-**Tech Stack:** Next.js, TypeScript, Tailwind CSS, Prisma (SQLite), NextAuth (Auth.js) v5, bcrypt, react-organizational-chart, html-to-image, jsPDF, Vitest.
+**Tech Stack:** Next.js, TypeScript, Tailwind CSS, Prisma (SQLite), react-organizational-chart, html-to-image, jsPDF, Vitest.
 
 **Spec:** [docs/superpowers/specs/2026-09-23-struktur-organisasi-otomatis-design.md](../specs/2026-09-23-struktur-organisasi-otomatis-design.md)
+
+> **Revision (2026-09-23):** the original plan had a login system (NextAuth, `User` model, Admin/Viewer roles). The user removed this requirement mid-implementation, after Task 1 and Task 2 were already built and reviewed — everyone can view and manage data with no login. Task 3 below (new) removes the now-unused `User` model and auth scaffolding that Task 2 had already added; the former Task 5 (Auth) is deleted; Tasks 6-8 below have their role checks stripped. Tasks 6 through 11 keep their original numbers — only Task 3 is new and the old Task 3/4 shifted to 4/5.
 
 ## Global Constraints
 
 - Single organization only — no multi-tenant support.
 - Hierarchy comes only from explicit `atasanId`, never inferred from `jabatan` text.
 - `divisi` is a display-only field — must never affect tree structure or grouping logic.
-- Exactly two roles: `ADMIN` (full CRUD) and `VIEWER` (read + export only). No third role.
-- All write endpoints (`POST`/`PATCH`/`DELETE`) must re-check role server-side, never trust client-side hiding of buttons alone.
+- No login/authentication — every page and API endpoint is open to any visitor, no role distinction.
 - Photo uploads: reject anything that isn't `image/jpeg` or `image/png`, and anything over 5MB — enforced both client and server side.
 - Deleting a person must reparent their direct reports to `atasanId = null`, never cascade-delete them.
 
@@ -176,7 +177,7 @@ Expected: creates `prisma/dev.db` and `prisma/migrations/`, prints "Your databas
 
 - [ ] **Step 5: Write the seed script**
 
-Install bcrypt (used here and in Task 5):
+Install bcrypt (used here for the seed script; note: Task 3 below later removes this along with the `User` model, since the login requirement was dropped):
 
 ```bash
 npm install bcryptjs
@@ -254,7 +255,80 @@ git commit -m "feat: add Prisma schema, client, and admin seed script"
 
 ---
 
-### Task 3: Cycle-detection utility (TDD)
+### Task 3: Remove auth/User model (scope revision)
+
+**Files:**
+- Modify: `prisma/schema.prisma` (remove the `User` model)
+- Delete: `prisma/seed.ts`
+- Modify: `package.json` (remove the `prisma.seed` config, the `seed` script, and the `bcryptjs`/`@types/bcryptjs` dependencies)
+- Create: a new Prisma migration dropping the `User` table
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces: a `prisma/schema.prisma` with only the `Person` model — no other task depends on `User`, `Role`, or any auth-related export (confirmed: no task from this point on imports anything from `@/lib/auth` or references `session`/`role`).
+
+- [ ] **Step 1: Remove the `User` model from the schema**
+
+Edit `prisma/schema.prisma` to delete the entire `model User { ... }` block, leaving only the `generator`, `datasource`, and `model Person` blocks. The file should read:
+
+```prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Person {
+  id        String   @id @default(cuid())
+  nama      String
+  jabatan   String
+  divisi    String?
+  jobdesk   String?
+  fotoUrl   String?
+  atasanId  String?
+  atasan    Person?  @relation("Reports", fields: [atasanId], references: [id])
+  bawahan   Person[] @relation("Reports")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+```
+
+- [ ] **Step 2: Generate and apply the migration**
+
+```bash
+npx prisma migrate dev --name remove_user_auth
+```
+
+Expected: Prisma detects the `User` table needs to be dropped, generates a migration that does `DROP TABLE "User"`, and applies it. Confirm with `npx prisma migrate status` that there are no pending migrations.
+
+- [ ] **Step 3: Delete the seed script and its wiring**
+
+```bash
+rm prisma/seed.ts
+npm uninstall bcryptjs @types/bcryptjs
+```
+
+In `package.json`, remove the `"prisma": { "seed": "tsx prisma/seed.ts" }` block entirely, and remove the `"seed": "prisma db seed"` line from `"scripts"`.
+
+- [ ] **Step 4: Verify**
+
+Run: `npx prisma generate` (regenerates the Prisma Client without the `User` model — confirm no errors)
+Run: `npm test`
+Expected: `prisma generate` succeeds with no errors; `npm test` still passes (0 test files at this point, or the cycle/tree tests if already present — either way, no failures).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add -A
+git commit -m "refactor: remove auth/User model, no login required"
+```
+
+---
+
+### Task 4: Cycle-detection utility (TDD)
 
 **Files:**
 - Create: `src/lib/cycle.ts`
@@ -346,7 +420,7 @@ git commit -m "feat: add cycle-detection utility for org hierarchy"
 
 ---
 
-### Task 4: Tree-building utility (TDD)
+### Task 5: Tree-building utility (TDD)
 
 **Files:**
 - Create: `src/lib/tree.ts`
@@ -460,228 +534,6 @@ git commit -m "feat: add tree-building utility for org chart"
 
 ---
 
-### Task 5: Auth (NextAuth credentials + role session) and login page
-
-**Files:**
-- Create: `src/lib/auth.ts`
-- Create: `src/app/api/auth/[...nextauth]/route.ts`
-- Create: `src/middleware.ts`
-- Create: `src/app/login/page.tsx`
-- Modify: `src/app/layout.tsx` (wrap children in session-aware nav, minimal)
-- Modify: `.env` (add `AUTH_SECRET`)
-
-**Interfaces:**
-- Consumes: `db` from `src/lib/db.ts` (Task 2).
-- Produces: `auth()` (server-side session getter), `handlers` (route handlers), `signIn`/`signOut` server actions from `@/lib/auth`; `session.user.role: "ADMIN" | "VIEWER"` and `session.user.email` available in any server component/route via `await auth()`.
-
-- [ ] **Step 1: Install NextAuth and generate a secret**
-
-```bash
-npm install next-auth@beta
-node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-```
-
-Add the printed value to `.env`:
-
-```
-AUTH_SECRET="<paste generated value>"
-```
-
-- [ ] **Step 2: Configure NextAuth with a credentials provider**
-
-Create `src/lib/auth.ts`:
-
-```typescript
-import NextAuth from "next-auth";
-import Credentials from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
-import { db } from "@/lib/db";
-
-export const { handlers, auth, signIn, signOut } = NextAuth({
-  session: { strategy: "jwt" },
-  pages: { signIn: "/login" },
-  providers: [
-    Credentials({
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-      },
-      authorize: async (credentials) => {
-        const email = credentials?.email as string | undefined;
-        const password = credentials?.password as string | undefined;
-        if (!email || !password) return null;
-
-        const user = await db.user.findUnique({ where: { email } });
-        if (!user) return null;
-
-        const valid = await bcrypt.compare(password, user.passwordHash);
-        if (!valid) return null;
-
-        return { id: user.id, email: user.email, role: user.role };
-      },
-    }),
-  ],
-  callbacks: {
-    jwt: async ({ token, user }) => {
-      if (user) {
-        token.role = (user as { role: "ADMIN" | "VIEWER" }).role;
-      }
-      return token;
-    },
-    session: async ({ session, token }) => {
-      if (session.user) {
-        session.user.role = token.role as "ADMIN" | "VIEWER";
-      }
-      return session;
-    },
-  },
-});
-```
-
-Create `src/types/next-auth.d.ts` to extend the session type:
-
-```typescript
-import { DefaultSession } from "next-auth";
-
-declare module "next-auth" {
-  interface Session {
-    user: {
-      role: "ADMIN" | "VIEWER";
-    } & DefaultSession["user"];
-  }
-}
-```
-
-- [ ] **Step 3: Add the NextAuth route handler**
-
-Create `src/app/api/auth/[...nextauth]/route.ts`:
-
-```typescript
-export { GET, POST } from "@/lib/auth";
-```
-
-- [ ] **Step 4: Add route protection middleware**
-
-Create `src/middleware.ts`:
-
-```typescript
-import { auth } from "@/lib/auth";
-import { NextResponse } from "next/server";
-
-function isAdminOnlyPath(pathname: string): boolean {
-  return pathname === "/orang/baru" || /^\/orang\/[^/]+\/edit$/.test(pathname);
-}
-
-export default auth((req) => {
-  const { pathname } = req.nextUrl;
-
-  if (pathname === "/login") return NextResponse.next();
-
-  if (!req.auth) {
-    return NextResponse.redirect(new URL("/login", req.url));
-  }
-
-  if (isAdminOnlyPath(pathname) && req.auth.user.role !== "ADMIN") {
-    return NextResponse.redirect(new URL("/", req.url));
-  }
-
-  return NextResponse.next();
-});
-
-export const config = {
-  matcher: ["/", "/orang/:path*"],
-};
-```
-
-- [ ] **Step 5: Build the login page**
-
-Create `src/app/login/page.tsx`:
-
-```tsx
-"use client";
-
-import { useState } from "react";
-import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
-
-export default function LoginPage() {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    const res = await signIn("credentials", { email, password, redirect: false });
-    if (res?.error) {
-      setError("Email atau password salah.");
-      return;
-    }
-    router.push("/");
-    router.refresh();
-  }
-
-  return (
-    <main className="mx-auto mt-24 max-w-sm">
-      <h1 className="mb-4 text-xl font-semibold">Login</h1>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="rounded border px-3 py-2"
-          required
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="rounded border px-3 py-2"
-          required
-        />
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <button type="submit" className="rounded bg-black px-3 py-2 text-white">
-          Login
-        </button>
-      </form>
-    </main>
-  );
-}
-```
-
-Wrap `src/app/layout.tsx`'s `<SessionProvider>` (needed by `next-auth/react`'s `useSession`/`signIn`) — create `src/components/SessionProviderWrapper.tsx`:
-
-```tsx
-"use client";
-
-import { SessionProvider } from "next-auth/react";
-
-export default function SessionProviderWrapper({ children }: { children: React.ReactNode }) {
-  return <SessionProvider>{children}</SessionProvider>;
-}
-```
-
-In `src/app/layout.tsx`, wrap `{children}` with `<SessionProviderWrapper>{children}</SessionProviderWrapper>` (import it at the top).
-
-- [ ] **Step 6: Manually verify login flow**
-
-Run: `npm run dev`
-- Visit `http://localhost:3000/` — expect redirect to `/login`.
-- Log in with `admin@example.com` / `admin123` — expect redirect to `/` and no further redirect loop.
-- Expected: login succeeds, session persists across reload.
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add -A
-git commit -m "feat: add NextAuth credentials login with role-based middleware"
-```
-
----
-
 ### Task 6: Person API routes (list, create, update, delete-with-reparent)
 
 **Files:**
@@ -689,8 +541,8 @@ git commit -m "feat: add NextAuth credentials login with role-based middleware"
 - Create: `src/app/api/orang/[id]/route.ts`
 
 **Interfaces:**
-- Consumes: `db` (Task 2), `auth` (Task 5), `wouldCreateCycle` (Task 3).
-- Produces: `GET /api/orang` → `Person[]` (shape matches `Task 4`'s `Person` type); `POST /api/orang` (body: `{ nama, jabatan, divisi?, jobdesk?, fotoUrl?, atasanId? }`) → created `Person`; `PATCH /api/orang/[id]` (same body, partial) → updated `Person`; `DELETE /api/orang/[id]` → `{ ok: true }`, reparents direct reports to `atasanId: null`.
+- Consumes: `db` (Task 2), `wouldCreateCycle` (Task 4).
+- Produces: `GET /api/orang` → `Person[]` (shape matches `Task 5`'s `Person` type); `POST /api/orang` (body: `{ nama, jabatan, divisi?, jobdesk?, fotoUrl?, atasanId? }`) → created `Person`; `PATCH /api/orang/[id]` (same body, partial) → updated `Person`; `DELETE /api/orang/[id]` → `{ ok: true }`, reparents direct reports to `atasanId: null`. No auth — every route is open.
 
 - [ ] **Step 1: Implement the collection route**
 
@@ -698,7 +550,6 @@ Create `src/app/api/orang/route.ts`:
 
 ```typescript
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 export async function GET() {
@@ -707,11 +558,6 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (session?.user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   const body = await req.json();
   const { nama, jabatan, divisi, jobdesk, fotoUrl, atasanId } = body;
 
@@ -733,16 +579,10 @@ Create `src/app/api/orang/[id]/route.ts`:
 
 ```typescript
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { wouldCreateCycle } from "@/lib/cycle";
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await auth();
-  if (session?.user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   const body = await req.json();
   const { nama, jabatan, divisi, jobdesk, fotoUrl, atasanId } = body;
 
@@ -766,11 +606,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await auth();
-  if (session?.user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   await db.person.updateMany({
     where: { atasanId: params.id },
     data: { atasanId: null },
@@ -784,10 +619,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
 
 - [ ] **Step 3: Manually verify with the running dev server**
 
-Run: `npm run dev`, then in a second terminal (while logged in — copy the session cookie from the browser dev tools, or temporarily test via the browser's fetch console at `http://localhost:3000`):
+Run: `npm run dev`, then in the browser devtools console at `http://localhost:3000`:
 
 ```javascript
-// paste in browser devtools console at localhost:3000 while logged in as admin
 await fetch("/api/orang", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nama: "Alice", jabatan: "Direktur" }) }).then(r => r.json())
 ```
 
@@ -808,8 +642,8 @@ git commit -m "feat: add Person API routes with cycle guard and delete-reparent"
 - Create: `src/app/api/upload/route.ts`
 
 **Interfaces:**
-- Consumes: `auth` (Task 5).
-- Produces: `POST /api/upload` (multipart form data, field `file`) → `{ url: string }` where `url` is a `/uploads/<filename>` path usable as `fotoUrl`.
+- Consumes: nothing beyond Node's `fs`.
+- Produces: `POST /api/upload` (multipart form data, field `file`) → `{ url: string }` where `url` is a `/uploads/<filename>` path usable as `fotoUrl`. No auth — open route.
 
 - [ ] **Step 1: Implement the upload route**
 
@@ -817,7 +651,6 @@ Create `src/app/api/upload/route.ts`:
 
 ```typescript
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 
@@ -825,11 +658,6 @@ const ALLOWED_TYPES = ["image/jpeg", "image/png"];
 const MAX_SIZE = 5 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (session?.user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   const form = await req.formData();
   const file = form.get("file") as File | null;
 
@@ -857,7 +685,7 @@ export async function POST(req: NextRequest) {
 
 - [ ] **Step 2: Manually verify**
 
-Run: `npm run dev`. While logged in as admin, in the browser devtools console at `http://localhost:3000`:
+Run: `npm run dev`. In the browser devtools console at `http://localhost:3000`:
 
 ```javascript
 const input = document.createElement("input");
@@ -887,8 +715,8 @@ git commit -m "feat: add photo upload API route"
 - Create: `src/components/PersonTable.tsx`
 
 **Interfaces:**
-- Consumes: `GET /api/orang` (Task 6), `auth` (Task 5).
-- Produces: page rendering a table of all people, with Admin-only "Tambah", "Edit", "Hapus" controls; used as the entry point to Task 9's forms.
+- Consumes: `GET /api/orang` (Task 6).
+- Produces: page rendering a table of all people, with "Tambah", "Edit", "Hapus" controls visible to everyone; used as the entry point to Task 9's forms.
 
 - [ ] **Step 1: Build the table component**
 
@@ -908,7 +736,7 @@ type Person = {
   fotoUrl: string | null;
 };
 
-export default function PersonTable({ people, isAdmin }: { people: Person[]; isAdmin: boolean }) {
+export default function PersonTable({ people }: { people: Person[] }) {
   const router = useRouter();
 
   async function handleDelete(id: string) {
@@ -925,7 +753,7 @@ export default function PersonTable({ people, isAdmin }: { people: Person[]; isA
           <th className="py-2">Nama</th>
           <th className="py-2">Jabatan</th>
           <th className="py-2">Divisi</th>
-          {isAdmin && <th className="py-2">Aksi</th>}
+          <th className="py-2">Aksi</th>
         </tr>
       </thead>
       <tbody>
@@ -937,16 +765,14 @@ export default function PersonTable({ people, isAdmin }: { people: Person[]; isA
             <td className="py-2">{p.nama}</td>
             <td className="py-2">{p.jabatan}</td>
             <td className="py-2">{p.divisi ?? "-"}</td>
-            {isAdmin && (
-              <td className="flex gap-2 py-2">
-                <Link href={`/orang/${p.id}/edit`} className="text-blue-600 underline">
-                  Edit
-                </Link>
-                <button onClick={() => handleDelete(p.id)} className="text-red-600 underline">
-                  Hapus
-                </button>
-              </td>
-            )}
+            <td className="flex gap-2 py-2">
+              <Link href={`/orang/${p.id}/edit`} className="text-blue-600 underline">
+                Edit
+              </Link>
+              <button onClick={() => handleDelete(p.id)} className="text-red-600 underline">
+                Hapus
+              </button>
+            </td>
           </tr>
         ))}
       </tbody>
@@ -961,26 +787,21 @@ Create `src/app/orang/page.tsx`:
 
 ```tsx
 import Link from "next/link";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import PersonTable from "@/components/PersonTable";
 
 export default async function OrangPage() {
-  const session = await auth();
-  const isAdmin = session?.user.role === "ADMIN";
   const people = await db.person.findMany({ orderBy: { nama: "asc" } });
 
   return (
     <main className="mx-auto max-w-4xl p-6">
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-semibold">Daftar Orang</h1>
-        {isAdmin && (
-          <Link href="/orang/baru" className="rounded bg-black px-3 py-2 text-white">
-            Tambah Orang
-          </Link>
-        )}
+        <Link href="/orang/baru" className="rounded bg-black px-3 py-2 text-white">
+          Tambah Orang
+        </Link>
       </div>
-      <PersonTable people={people} isAdmin={isAdmin} />
+      <PersonTable people={people} />
     </main>
   );
 }
@@ -988,7 +809,7 @@ export default async function OrangPage() {
 
 - [ ] **Step 3: Manually verify**
 
-Run: `npm run dev`, log in as admin, visit `/orang`. Expected: table lists any people created in Task 6's manual test, "Tambah Orang" button visible, Edit/Hapus links visible per row. Confirm Hapus removes a row and (if it had children) their `atasanId` becomes `null` — re-check via `/api/orang` in devtools console.
+Run: `npm run dev`, visit `/orang`. Expected: table lists any people created in Task 6's manual test, "Tambah Orang" button visible, Edit/Hapus links visible per row. Confirm Hapus removes a row and (if it had children) their `atasanId` becomes `null` — re-check via `/api/orang` in devtools console.
 
 - [ ] **Step 4: Commit**
 
@@ -1180,7 +1001,7 @@ export default async function EditPersonPage({ params }: { params: { id: string 
 
 - [ ] **Step 4: Manually verify**
 
-Run: `npm run dev`, log in as admin. Go to `/orang/baru`, fill the form, upload a photo, pick an atasan, submit — expect redirect to `/orang` with the new row visible. Edit that same person, change jabatan, submit — expect the change reflected. Try setting a person's atasan to one of their own descendants — expect the "Pilihan atasan ini akan membuat siklus" error shown inline.
+Run: `npm run dev`. Go to `/orang/baru`, fill the form, upload a photo, pick an atasan, submit — expect redirect to `/orang` with the new row visible. Edit that same person, change jabatan, submit — expect the change reflected. Try setting a person's atasan to one of their own descendants — expect the "Pilihan atasan ini akan membuat siklus" error shown inline.
 
 - [ ] **Step 5: Commit**
 
@@ -1407,5 +1228,5 @@ git commit -m "feat: add PNG/PDF export for org chart"
 
 ## Post-plan checklist (manual, not a task)
 
-- Log in as Viewer (create a second seed user with `role: "VIEWER"` manually via Prisma Studio: `npx prisma studio`) and confirm: `/orang/baru` and `/orang/[id]/edit` redirect to `/`, no Edit/Hapus/Tambah controls appear on `/orang`, and write API calls return 403.
+- Confirm no page or API route requires a session — open `/`, `/orang`, `/orang/baru` in a fresh incognito window with no cookies and confirm all work.
 - Run `npm test` — all Vitest suites (`cycle.test.ts`, `tree.test.ts`) pass.

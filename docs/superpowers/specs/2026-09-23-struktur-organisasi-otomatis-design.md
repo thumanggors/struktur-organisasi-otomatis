@@ -13,8 +13,10 @@ interaktif, dengan kemampuan export ke PNG/PDF.
   disimpulkan dari nama jabatan.
 - Divisi/Departemen adalah field informasi saja — tidak mempengaruhi bentuk
   pohon hierarki.
-- Multi-user dengan dua role: Admin (kelola data) dan Viewer (lihat & export
-  saja).
+- Tanpa login — siapa saja yang membuka web app bisa melihat chart maupun
+  mengelola data (tambah/edit/hapus orang), tidak ada pembatasan akses.
+  (Revisi 2026-09-23: rencana awal punya login + role Admin/Viewer, dicabut
+  atas permintaan user — lihat commit yang menghapus model `User`.)
 - Data disimpan permanen sendiri (database + file storage lokal), tidak
   tergantung akun/layanan eksternal.
 
@@ -23,8 +25,7 @@ interaktif, dengan kemampuan export ke PNG/PDF.
 - **Next.js 14+ (App Router, TypeScript)** — satu aplikasi untuk UI dan API
   routes (route handlers).
 - **SQLite via Prisma ORM** — file database lokal (`prisma/dev.db`).
-- **NextAuth (Auth.js), credentials provider** — login email/password, role
-  disimpan di session (`ADMIN` | `VIEWER`).
+- Tidak ada sistem login/auth — semua rute dan endpoint terbuka.
 - **Foto**: disimpan sebagai file di `/public/uploads/`, path-nya disimpan di
   kolom `fotoUrl` pada tabel `Person`.
 - **Chart**: komponen React di atas `react-organizational-chart`, menyusun
@@ -48,36 +49,26 @@ interaktif, dengan kemampuan export ke PNG/PDF.
 | `atasanId` | string? (FK ke `Person.id`) | null = posisi puncak |
 | `createdAt` / `updatedAt` | datetime | |
 
-### `User`
-
-| Field | Tipe | Keterangan |
-|---|---|---|
-| `id` | string (cuid) | primary key |
-| `email` | string | unik |
-| `passwordHash` | string | |
-| `role` | enum `ADMIN` \| `VIEWER` | |
+(Model `User` dihapus — tidak ada login/role.)
 
 ## Halaman & Rute
 
-- `/login` — form login.
 - `/` — halaman chart. Tampilkan struktur organisasi sebagai pohon, tombol
-  Export PNG dan Export PDF. Bisa diakses Admin & Viewer.
-- `/orang` — daftar orang dalam bentuk tabel. Admin lihat tombol
-  tambah/edit/hapus; Viewer read-only (tombol tidak ditampilkan).
-- `/orang/baru` — form tambah orang. Admin only.
-- `/orang/[id]/edit` — form edit orang. Admin only.
+  Export PNG dan Export PDF. Terbuka untuk siapa saja.
+- `/orang` — daftar orang dalam bentuk tabel, dengan tombol
+  tambah/edit/hapus untuk semua pengunjung.
+- `/orang/baru` — form tambah orang.
+- `/orang/[id]/edit` — form edit orang.
 
 ## API
 
 - `GET /api/orang` — daftar semua orang.
-- `POST /api/orang` — tambah orang baru (Admin only).
-- `PATCH /api/orang/[id]` — update orang (Admin only).
-- `DELETE /api/orang/[id]` — hapus orang (Admin only).
-- `POST /api/upload` — upload foto, kembalikan path tersimpan (Admin only).
+- `POST /api/orang` — tambah orang baru.
+- `PATCH /api/orang/[id]` — update orang.
+- `DELETE /api/orang/[id]` — hapus orang.
+- `POST /api/upload` — upload foto, kembalikan path tersimpan.
 
-Semua endpoint tulis (`POST`/`PATCH`/`DELETE`) memvalidasi session role
-`ADMIN` di server; request dari Viewer atau tanpa session ditolak dengan
-403.
+Semua endpoint terbuka, tidak ada pengecekan sesi/role.
 
 ## Alur Kerja & Penanganan Error
 
@@ -93,8 +84,6 @@ Semua endpoint tulis (`POST`/`PATCH`/`DELETE`) memvalidasi session role
   posisi puncak), bukan ikut terhapus.
 - **Upload foto**: validasi tipe file (`image/jpeg`, `image/png`) dan ukuran
   maksimal 5MB, di client (sebelum upload) dan server (sebelum simpan).
-- **Akses ditolak**: Viewer yang mengakses halaman/endpoint Admin-only
-  di-redirect ke `/` (halaman) atau menerima 403 (API).
 - **Export gagal**: tangkap error dari `html-to-image`/`jsPDF`, tampilkan
   pesan error di UI tanpa membuat halaman crash.
 
@@ -105,9 +94,8 @@ Semua endpoint tulis (`POST`/`PATCH`/`DELETE`) memvalidasi session role
     database).
   - Fungsi transformasi `Person[]` (flat, dengan `atasanId`) menjadi struktur
     pohon bersarang untuk komponen chart.
-- **Manual/smoke test** sebelum dianggap selesai: login sebagai Admin dan
-  Viewer, tambah/edit/hapus orang, upload foto, cek hak akses Viewer
-  (tidak bisa tulis), export PNG, export PDF — dicek langsung di browser.
+- **Manual/smoke test** sebelum dianggap selesai: tambah/edit/hapus orang,
+  upload foto, export PNG, export PDF — dicek langsung di browser.
 - Tidak menggunakan framework e2e (Playwright dll) untuk scope awal ini;
   bisa ditambahkan nanti jika diperlukan (YAGNI).
 
@@ -115,5 +103,5 @@ Semua endpoint tulis (`POST`/`PATCH`/`DELETE`) memvalidasi session role
 
 - Multi-organisasi/multi-tenant.
 - Pengelompokan visual per divisi di chart (divisi murni label).
-- Role selain Admin/Viewer (mis. Editor bertingkat).
+- Login/autentikasi/role dalam bentuk apapun.
 - Import massal via Excel/CSV (bisa jadi permintaan terpisah nanti).
