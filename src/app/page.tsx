@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
-import { buildTree } from "@/lib/tree";
+import { buildTree, listDivisi } from "@/lib/tree";
+import { divisiColorMap } from "@/lib/divisiColor";
 import { getSettings } from "@/lib/settings";
 import OrgChart from "@/components/OrgChartLazy";
 import ExportButtons from "@/components/ExportButtonsLazy";
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function HomePage() {
   const [people, settings] = await Promise.all([db.person.findMany(), getSettings()]);
   const roots = buildTree(people);
+  const colorMap = divisiColorMap(listDivisi(people));
 
   return (
     <div className="p-6 md:p-8">
@@ -18,7 +20,7 @@ export default async function HomePage() {
       <div className="mt-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
         <ExportButtons />
         <div className="overflow-auto">
-          <OrgChart roots={roots} companyName={settings?.companyName} logoUrl={settings?.logoUrl} />
+          <OrgChart roots={roots} companyName={settings?.companyName} logoUrl={settings?.logoUrl} colorMap={colorMap} />
         </div>
       </div>
     </div>

@@ -59,7 +59,7 @@ export function withAncestors(people: Person[], divisi: string): Person[] {
 }
 
 /** Distinct, sorted, non-empty divisi values present in `people`. */
-export function listDivisi(people: Person[]): string[] {
+export function listDivisi(people: Pick<Person, "divisi">[]): string[] {
   return Array.from(new Set(people.map((p) => p.divisi).filter((d): d is string => !!d))).sort(
     (a, b) => a.localeCompare(b)
   );

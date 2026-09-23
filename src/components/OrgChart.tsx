@@ -4,41 +4,44 @@ import { Tree, TreeNode } from "react-organizational-chart";
 import { User } from "lucide-react";
 import type { PersonNode } from "@/lib/tree";
 import { splitStaff } from "@/lib/tree";
-import { divisiColor } from "@/lib/divisiColor";
+import { divisiColorFor, type DivisiColorMap, type DivisiColorSet } from "@/lib/divisiColor";
 
-const NEUTRAL_ACCENT = "border-l-slate-800";
+const NEUTRAL: DivisiColorSet = {
+  badge: "bg-slate-100 text-slate-700",
+  solid: "bg-slate-800",
+  border: "border-slate-800",
+  bg: "bg-slate-800",
+};
 
-function Card({ node }: { node: PersonNode }) {
-  const accent = node.divisi ? divisiColor(node.divisi).border : NEUTRAL_ACCENT;
+function Card({ node, colorMap }: { node: PersonNode; colorMap: DivisiColorMap }) {
+  const color = node.divisi ? divisiColorFor(colorMap, node.divisi) : NEUTRAL;
   return (
-    <div
-      className={`inline-flex min-w-[11rem] flex-col items-center gap-1 rounded-lg border border-slate-200 border-l-4 bg-white p-3 text-center shadow-sm ${accent}`}
-      title={node.jobdesk || undefined}
-    >
-      {node.fotoUrl ? (
-        <img src={node.fotoUrl} alt={node.nama} className="h-14 w-14 rounded-full object-cover ring-2 ring-slate-100" />
-      ) : (
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-400">
-          <User className="h-6 w-6" aria-hidden="true" />
-        </div>
-      )}
-      <p className="font-semibold text-slate-900">{node.nama}</p>
-      <p className="text-sm text-slate-500">{node.jabatan}</p>
-      {node.divisi && (
-        <span className={`mt-0.5 rounded-full px-2 py-0.5 text-xs font-medium ${divisiColor(node.divisi).badge}`}>
-          {node.divisi}
-        </span>
-      )}
+    <div className="inline-flex min-w-[11rem] flex-col items-center overflow-hidden rounded-lg border border-slate-200 bg-white text-center shadow-sm">
+      <div className={`h-1.5 w-full ${color.bg}`} aria-hidden="true" />
+      <div className="flex flex-col items-center gap-1 p-3" title={node.jobdesk || undefined}>
+        {node.fotoUrl ? (
+          <img src={node.fotoUrl} alt={node.nama} className="h-14 w-14 rounded-full object-cover ring-2 ring-slate-100" />
+        ) : (
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+            <User className="h-6 w-6" aria-hidden="true" />
+          </div>
+        )}
+        <p className="font-semibold text-slate-900">{node.nama}</p>
+        <p className="text-sm text-slate-500">{node.jabatan}</p>
+        {node.divisi && (
+          <span className={`mt-0.5 rounded-full px-2 py-0.5 text-xs font-medium ${color.badge}`}>{node.divisi}</span>
+        )}
+      </div>
     </div>
   );
 }
 
 /** A Wakil Direktur/Sekretaris and (if any) their own reports, still nested below them. */
-function StaffBranch({ node }: { node: PersonNode }) {
-  if (node.children.length === 0) return <Card node={node} />;
+function StaffBranch({ node, colorMap }: { node: PersonNode; colorMap: DivisiColorMap }) {
+  if (node.children.length === 0) return <Card node={node} colorMap={colorMap} />;
   return (
-    <Tree label={<Card node={node} />} lineWidth="2px" lineColor="#cbd5e1" lineBorderRadius="8px">
-      {renderChildren(node.children)}
+    <Tree label={<Card node={node} colorMap={colorMap} />} lineWidth="2px" lineColor="#cbd5e1" lineBorderRadius="8px">
+      {renderChildren(node.children, colorMap)}
     </Tree>
   );
 }
@@ -50,11 +53,19 @@ function StaffBranch({ node }: { node: PersonNode }) {
  * height, so it's part of normal document flow — the "line" reports
  * below are correctly pushed down to make room, not overlapped.
  */
-function NodeLabel({ node, staff }: { node: PersonNode; staff: PersonNode[] }) {
-  if (staff.length === 0) return <Card node={node} />;
+function NodeLabel({
+  node,
+  staff,
+  colorMap,
+}: {
+  node: PersonNode;
+  staff: PersonNode[];
+  colorMap: DivisiColorMap;
+}) {
+  if (staff.length === 0) return <Card node={node} colorMap={colorMap} />;
   return (
     <div className="inline-flex flex-col items-center">
-      <Card node={node} />
+      <Card node={node} colorMap={colorMap} />
       {/* Equal side columns keep the trunk exactly under the card's center. */}
       <div className="grid grid-cols-[1fr_2px_1fr]">
         <div aria-hidden="true" />
@@ -64,7 +75,7 @@ function NodeLabel({ node, staff }: { node: PersonNode; staff: PersonNode[] }) {
             <div key={s.id} className="flex items-start">
               {/* mt-16 ≈ half a card's height, so the tick meets the staff card itself, not its subtree. */}
               <div className="mt-16 h-0.5 w-6 shrink-0 bg-slate-300" aria-hidden="true" />
-              <StaffBranch node={s} />
+              <StaffBranch node={s} colorMap={colorMap} />
             </div>
           ))}
         </div>
@@ -73,25 +84,25 @@ function NodeLabel({ node, staff }: { node: PersonNode; staff: PersonNode[] }) {
   );
 }
 
-function renderNode(node: PersonNode) {
+function renderNode(node: PersonNode, colorMap: DivisiColorMap) {
   const { staff, line } = splitStaff(node.children);
   return (
-    <TreeNode key={node.id} label={<NodeLabel node={node} staff={staff} />}>
-      {renderChildren(line)}
+    <TreeNode key={node.id} label={<NodeLabel node={node} staff={staff} colorMap={colorMap} />}>
+      {renderChildren(line, colorMap)}
     </TreeNode>
   );
 }
 
-function renderChildren(children: PersonNode[]) {
+function renderChildren(children: PersonNode[], colorMap: DivisiColorMap) {
   const allLeaves = children.every((c) => c.children.length === 0);
 
   if (children.length > 3 && allLeaves) {
     return (
       <TreeNode
         label={
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-3">
             {children.map((child) => (
-              <Card key={child.id} node={child} />
+              <Card key={child.id} node={child} colorMap={colorMap} />
             ))}
           </div>
         }
@@ -99,17 +110,19 @@ function renderChildren(children: PersonNode[]) {
     );
   }
 
-  return children.map((child) => renderNode(child));
+  return children.map((child) => renderNode(child, colorMap));
 }
 
 export default function OrgChart({
   roots,
   companyName,
   logoUrl,
+  colorMap,
 }: {
   roots: PersonNode[];
   companyName?: string | null;
   logoUrl?: string | null;
+  colorMap: DivisiColorMap;
 }) {
   if (roots.length === 0) {
     return <p className="text-slate-500">Belum ada data orang.</p>;
@@ -128,12 +141,12 @@ export default function OrgChart({
         return (
           <Tree
             key={root.id}
-            label={<NodeLabel node={root} staff={staff} />}
+            label={<NodeLabel node={root} staff={staff} colorMap={colorMap} />}
             lineWidth="2px"
             lineColor="#cbd5e1"
             lineBorderRadius="8px"
           >
-            {renderChildren(line)}
+            {renderChildren(line, colorMap)}
           </Tree>
         );
       })}

@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Pencil, Trash2, User, Search } from "lucide-react";
-import { divisiColor } from "@/lib/divisiColor";
+import { divisiColorFor, divisiColorMap } from "@/lib/divisiColor";
+import { listDivisi } from "@/lib/tree";
 
 type Person = {
   id: string;
@@ -17,6 +18,7 @@ type Person = {
 export default function PersonTable({ people }: { people: Person[] }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const colorMap = useMemo(() => divisiColorMap(listDivisi(people)), [people]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -82,7 +84,7 @@ export default function PersonTable({ people }: { people: Person[] }) {
                 <td className="px-4 py-3 text-slate-600">{p.jabatan}</td>
                 <td className="px-4 py-3">
                   {p.divisi ? (
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${divisiColor(p.divisi).badge}`}>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${divisiColorFor(colorMap, p.divisi).badge}`}>
                       {p.divisi}
                     </span>
                   ) : (

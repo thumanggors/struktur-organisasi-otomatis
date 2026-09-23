@@ -65,7 +65,8 @@ describe("listDivisi", () => {
   });
 
   it("returns an empty array when no one has a divisi", () => {
-    expect(listDivisi([{ id: "a", nama: "A", jabatan: "X", divisi: null, jobdesk: null, fotoUrl: null, atasanId: null }])).toEqual([]);
+    const noDivisi: Person[] = [{ id: "a", nama: "A", jabatan: "X", divisi: null, jobdesk: null, fotoUrl: null, atasanId: null }];
+    expect(listDivisi(noDivisi)).toEqual([]);
   });
 });
 
