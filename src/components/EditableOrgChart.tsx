@@ -82,7 +82,7 @@ export default function EditableOrgChart({
             <span className="text-sm text-slate-500">
               {selected.size > 0
                 ? `${selected.size} kartu terblok — geser salah satunya untuk memindahkan semuanya. Klik area kosong atau Esc untuk batal.`
-                : "Geser kartu, atau titik biru pada garis untuk mengubah tinggi garis. Tekan lama di area kosong lalu tarik untuk memblok beberapa kartu."}
+                : "Geser kartu, atau titik biru pada garis untuk mengubah tinggi garis. Tarik di area kosong (atau tekan lama lalu tarik) untuk memblok beberapa kartu."}
             </span>
           </>
         ) : (

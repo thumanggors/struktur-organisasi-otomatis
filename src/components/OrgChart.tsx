@@ -84,7 +84,8 @@ export default function OrgChart({
    * One pointer gesture in chart coordinates (divided by the CSS zoom).
    * - on a selected card: drags the whole selection
    * - on any other card / bus handle: drags just `single`
-   * - on empty canvas: hold still LONG_PRESS ms, then drag a box to select; a plain click clears
+   * - on empty canvas with a mouse: drag a selection box; a plain click clears
+   * - touch/pen: held still LONG_PRESS ms on canvas or a card, then drag a selection box
    */
   function gesture(e: React.PointerEvent, single?: { id?: string; from: Pos; apply: (p: Pos) => void }) {
     const el = canvasRef.current;
@@ -99,14 +100,18 @@ export default function OrgChart({
     const snap = (v: number) => Math.round(v / 8) * 8;
     const group = single?.id && selected?.has(single.id) ? selected : null;
     let moved = false;
-    let boxing = false;
-    const timer = single
-      ? undefined
-      : window.setTimeout(() => {
-          if (moved) return;
-          boxing = true;
-          setBox({ x1: start.x, y1: start.y, x2: start.x, y2: start.y });
-        }, LONG_PRESS);
+    const mouse = e.pointerType === "mouse";
+    let boxing = !single && mouse;
+    // Touch has no hover-drag on empty canvas, so a long press (canvas or card) starts the box.
+    // With a mouse a slow card drag must stay a drag; bus handles only ever drag.
+    const timer =
+      mouse || (single && !single.id)
+        ? undefined
+        : window.setTimeout(() => {
+            if (moved) return;
+            boxing = true;
+            setBox({ x1: start.x, y1: start.y, x2: start.x, y2: start.y });
+          }, LONG_PRESS);
 
     const move = (ev: PointerEvent) => {
       const p = toChart(ev.clientX, ev.clientY);
@@ -119,13 +124,13 @@ export default function OrgChart({
     };
     const up = (ev: PointerEvent) => {
       window.clearTimeout(timer);
-      if (boxing) {
+      if (boxing && moved) {
         const p = toChart(ev.clientX, ev.clientY);
         onSelect?.(new Set(cardsInRect(base, { x1: start.x, y1: start.y, x2: p.x, y2: p.y })));
-        setBox(null);
       } else if (!single && !moved) {
         onSelect?.(new Set());
       }
+      setBox(null);
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
     };
