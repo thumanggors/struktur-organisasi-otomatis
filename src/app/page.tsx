@@ -10,12 +10,16 @@ export default async function HomePage() {
   const roots = buildTree(people);
 
   return (
-    <main className="p-6">
-      <h1 className="mb-4 text-xl font-semibold">Struktur Organisasi</h1>
-      <ExportButtons />
-      <div className="overflow-auto">
-        <OrgChart roots={roots} />
+    <div className="p-6 md:p-8">
+      <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Struktur Organisasi</h1>
+      <p className="mt-1 text-sm text-slate-500">Tampilan lengkap seluruh struktur organisasi.</p>
+
+      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
+        <ExportButtons />
+        <div className="overflow-auto">
+          <OrgChart roots={roots} />
+        </div>
       </div>
-    </main>
+    </div>
   );
 }

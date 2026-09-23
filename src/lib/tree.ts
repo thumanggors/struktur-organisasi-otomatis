@@ -40,3 +40,27 @@ export function buildTree(people: Person[]): PersonNode[] {
 
   return roots;
 }
+
+/** People in `divisi`, plus every ancestor above them up to the top of the org. */
+export function withAncestors(people: Person[], divisi: string): Person[] {
+  const byId = new Map(people.map((p) => [p.id, p]));
+  const included = new Set<string>();
+
+  for (const p of people) {
+    if (p.divisi !== divisi) continue;
+    let current: Person | undefined = p;
+    while (current && !included.has(current.id)) {
+      included.add(current.id);
+      current = current.atasanId ? byId.get(current.atasanId) : undefined;
+    }
+  }
+
+  return people.filter((p) => included.has(p.id));
+}
+
+/** Distinct, sorted, non-empty divisi values present in `people`. */
+export function listDivisi(people: Person[]): string[] {
+  return Array.from(new Set(people.map((p) => p.divisi).filter((d): d is string => !!d))).sort(
+    (a, b) => a.localeCompare(b)
+  );
+}

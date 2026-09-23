@@ -12,9 +12,9 @@ export default async function EditPersonPage({ params }: { params: Promise<{ id:
   if (!person) notFound();
 
   return (
-    <main className="mx-auto max-w-md p-6">
-      <h1 className="mb-4 text-xl font-semibold">Edit Orang</h1>
+    <div className="mx-auto max-w-md p-6 md:p-8">
+      <h1 className="mb-6 text-2xl font-semibold tracking-tight text-slate-900">Edit Orang</h1>
       <PersonForm initial={person} allPeople={allPeople} />
-    </main>
+    </div>
   );
 }
