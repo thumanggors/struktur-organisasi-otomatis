@@ -146,17 +146,31 @@ export function layoutChart(roots: PersonNode[], manual: ManualLayout = { pos: {
   return { cards, lines, buses, width, height };
 }
 
+export type Rect = { x1: number; y1: number; x2: number; y2: number };
+
+/** Ids of cards touching the dragged selection box (corners in any order). */
+export function cardsInRect(layout: Layout, r: Rect): string[] {
+  const [l, rt] = [Math.min(r.x1, r.x2), Math.max(r.x1, r.x2)];
+  const [t, b] = [Math.min(r.y1, r.y2), Math.max(r.y1, r.y2)];
+  return layout.cards
+    .filter((c) => c.x < rt && c.x + CARD_W > l && c.y < b && c.y + CARD_H > t)
+    .map((c) => c.node.id);
+}
+
 /**
- * Moves every card and bus line of `layout` by (dx, dy), as a full manual
- * snapshot. The shift is clamped so nothing ends up left of / above the origin.
+ * Moves the selected cards (and the bus lines they own) by (dx, dy), as a full
+ * manual snapshot so unselected cards stay exactly where they are. The shift is
+ * clamped so the selection can't go left of / above the origin.
  */
-export function shiftAll(layout: Layout, dx: number, dy: number): ManualLayout {
-  const minX = Math.min(...layout.cards.map((c) => c.x));
-  const minY = Math.min(...layout.cards.map((c) => c.y));
-  const sx = Math.max(dx, -minX);
-  const sy = Math.max(dy, -minY);
+export function shiftSelected(layout: Layout, ids: Set<string>, dx: number, dy: number): ManualLayout {
+  const sel = layout.cards.filter((c) => ids.has(c.node.id));
+  if (sel.length === 0) return { pos: {}, busY: {} };
+  const sx = Math.max(dx, -Math.min(...sel.map((c) => c.x)));
+  const sy = Math.max(dy, -Math.min(...sel.map((c) => c.y)));
   return {
-    pos: Object.fromEntries(layout.cards.map((c) => [c.node.id, { x: c.x + sx, y: c.y + sy }])),
-    busY: Object.fromEntries(layout.buses.map((b) => [b.parentId, b.y + sy])),
+    pos: Object.fromEntries(
+      layout.cards.map((c) => [c.node.id, ids.has(c.node.id) ? { x: c.x + sx, y: c.y + sy } : { x: c.x, y: c.y }])
+    ),
+    busY: Object.fromEntries(layout.buses.map((b) => [b.parentId, ids.has(b.parentId) ? b.y + sy : b.y])),
   };
 }

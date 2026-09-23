@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { User } from "lucide-react";
 import type { PersonNode } from "@/lib/tree";
-import { CARD_H, CARD_W, layoutChart, shiftAll, type ManualLayout, type Pos } from "@/lib/layout";
+import { CARD_H, CARD_W, cardsInRect, layoutChart, shiftSelected, type ManualLayout, type Pos, type Rect } from "@/lib/layout";
 import { divisiColorFor, type DivisiColorMap, type DivisiColorSet } from "@/lib/divisiColor";
 
 const LONG_PRESS = 500; // ms
@@ -49,8 +49,8 @@ export default function OrgChart({
   manual,
   onMoveCard,
   onMoveBus,
-  selectedAll = false,
-  onSelectAll,
+  selected,
+  onSelect,
   onReplace,
 }: {
   roots: PersonNode[];
@@ -61,57 +61,71 @@ export default function OrgChart({
   /** Passing these turns on edit mode: cards and bus lines become draggable. */
   onMoveCard?: (id: string, pos: Pos) => void;
   onMoveBus?: (parentId: string, y: number) => void;
-  /** Long-press selects every card and line; dragging then moves them all at once. */
-  selectedAll?: boolean;
-  onSelectAll?: (selected: boolean) => void;
+  /** Box-selected cards; dragging any of them moves the whole selection. */
+  selected?: Set<string>;
+  onSelect?: (ids: Set<string>) => void;
   onReplace?: (manual: ManualLayout) => void;
 }) {
   const layout = useMemo(() => layoutChart(roots, manual), [roots, manual]);
   const editing = !!onMoveCard;
   const canvasRef = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState<Rect | null>(null);
+  const hasSelection = !!selected && selected.size > 0;
 
-  // Esc drops the select-all block.
+  // Esc drops the selection.
   useEffect(() => {
-    if (!selectedAll) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onSelectAll?.(false);
+    if (!hasSelection) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onSelect?.(new Set());
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedAll, onSelectAll]);
+  }, [hasSelection, onSelect]);
 
   /**
    * One pointer gesture in chart coordinates (divided by the CSS zoom).
-   * Held still for LONG_PRESS ms it selects everything, and the rest of the
-   * same drag moves the whole chart; otherwise it drags just `single`.
+   * - on a selected card: drags the whole selection
+   * - on any other card / bus handle: drags just `single`
+   * - on empty canvas: hold still LONG_PRESS ms, then drag a box to select; a plain click clears
    */
-  function gesture(e: React.PointerEvent, single?: { from: Pos; apply: (p: Pos) => void }) {
+  function gesture(e: React.PointerEvent, single?: { id?: string; from: Pos; apply: (p: Pos) => void }) {
     const el = canvasRef.current;
     if (!el || e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
-    const scale = el.getBoundingClientRect().width / el.offsetWidth || 1;
-    const sx = e.clientX, sy = e.clientY;
+    const rect = el.getBoundingClientRect();
+    const scale = rect.width / el.offsetWidth || 1;
+    const toChart = (cx: number, cy: number) => ({ x: (cx - rect.left) / scale, y: (cy - rect.top) / scale });
+    const start = toChart(e.clientX, e.clientY);
     const base = layout;
     const snap = (v: number) => Math.round(v / 8) * 8;
-    let all = selectedAll;
+    const group = single?.id && selected?.has(single.id) ? selected : null;
     let moved = false;
-    let longPressed = false;
-    const timer = window.setTimeout(() => {
-      if (moved) return;
-      all = longPressed = true;
-      onSelectAll?.(true);
-    }, LONG_PRESS);
+    let boxing = false;
+    const timer = single
+      ? undefined
+      : window.setTimeout(() => {
+          if (moved) return;
+          boxing = true;
+          setBox({ x1: start.x, y1: start.y, x2: start.x, y2: start.y });
+        }, LONG_PRESS);
 
     const move = (ev: PointerEvent) => {
-      const dx = (ev.clientX - sx) / scale, dy = (ev.clientY - sy) / scale;
+      const p = toChart(ev.clientX, ev.clientY);
+      const dx = p.x - start.x, dy = p.y - start.y;
       if (!moved && Math.hypot(dx, dy) < 6) return;
       moved = true;
-      if (all) onReplace?.(shiftAll(base, snap(dx), snap(dy)));
+      if (boxing) setBox({ x1: start.x, y1: start.y, x2: p.x, y2: p.y });
+      else if (group) onReplace?.(shiftSelected(base, group, snap(dx), snap(dy)));
       else if (single) single.apply({ x: Math.max(0, snap(single.from.x + dx)), y: Math.max(0, snap(single.from.y + dy)) });
     };
-    const up = () => {
+    const up = (ev: PointerEvent) => {
       window.clearTimeout(timer);
-      // A plain click on empty canvas clears the block.
-      if (!single && !moved && !longPressed) onSelectAll?.(false);
+      if (boxing) {
+        const p = toChart(ev.clientX, ev.clientY);
+        onSelect?.(new Set(cardsInRect(base, { x1: start.x, y1: start.y, x2: p.x, y2: p.y })));
+        setBox(null);
+      } else if (!single && !moved) {
+        onSelect?.(new Set());
+      }
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
     };
@@ -144,7 +158,7 @@ export default function OrgChart({
               key={i}
               points={pts.join(" ")}
               fill="none"
-              stroke={selectedAll ? "#0ea5e9" : "#64748b"}
+              stroke="#64748b"
               strokeWidth={3}
               strokeLinecap="round"
             />
@@ -156,12 +170,12 @@ export default function OrgChart({
             className={`absolute ${
               !editing
                 ? ""
-                : selectedAll
-                  ? "cursor-move rounded-lg bg-sky-50 ring-4 ring-sky-500"
+                : selected?.has(node.id)
+                  ? "cursor-move rounded-lg ring-4 ring-sky-500"
                   : "cursor-move rounded-lg ring-2 ring-sky-300 hover:ring-sky-500"
             }`}
             style={{ left: x, top: y, touchAction: editing ? "none" : undefined }}
-            onPointerDown={editing ? (e) => gesture(e, { from: { x, y }, apply: (p) => onMoveCard!(node.id, p) }) : undefined}
+            onPointerDown={editing ? (e) => gesture(e, { from: { x, y }, id: node.id, apply: (p) => onMoveCard!(node.id, p) }) : undefined}
           >
             <Card node={node} colorMap={colorMap} />
           </div>
@@ -180,6 +194,17 @@ export default function OrgChart({
               <div className="absolute h-3.5 w-3.5 rounded-full border-2 border-white bg-sky-500 shadow" />
             </div>
           ))}
+        {box && (
+          <div
+            className="pointer-events-none absolute rounded border-2 border-dashed border-sky-500 bg-sky-400/10"
+            style={{
+              left: Math.min(box.x1, box.x2),
+              top: Math.min(box.y1, box.y2),
+              width: Math.abs(box.x2 - box.x1),
+              height: Math.abs(box.y2 - box.y1),
+            }}
+          />
+        )}
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CARD_H, CARD_W, layoutChart, shiftAll } from "./layout";
+import { CARD_H, CARD_W, cardsInRect, layoutChart, shiftSelected } from "./layout";
 import type { PersonNode } from "./tree";
 
 let seq = 0;
@@ -63,16 +63,28 @@ describe("layoutChart", () => {
     expect(buses).toEqual([expect.objectContaining({ parentId: root.id, y: 222 })]);
   });
 
-  it("shiftAll moves cards and bus lines together, clamped at the origin", () => {
-    const root = n("A", [n("B"), n("C")]);
+  it("cardsInRect picks only cards touching the box, whichever way it was dragged", () => {
+    const b = n("B"), c = n("C");
+    const layout = layoutChart([n("A", [b, c])]);
+    const cb = layout.cards.find((x) => x.node.id === b.id)!;
+    // box dragged bottom-right to top-left around B only
+    expect(cardsInRect(layout, { x1: cb.x + 10, y1: cb.y + 10, x2: cb.x - 5, y2: cb.y - 5 })).toEqual([b.id]);
+  });
+
+  it("shiftSelected moves only the selection and the bus lines it owns", () => {
+    const b = n("B", [n("D"), n("E")]);
+    const root = n("A", [b, n("C")]);
     const base = layoutChart([root]);
-    const moved = layoutChart([root], shiftAll(base, 40, 16));
-    base.cards.forEach((c, i) => expect(moved.cards[i]).toMatchObject({ x: c.x + 40, y: c.y + 16 }));
-    expect(moved.buses[0].y).toBe(base.buses[0].y + 16);
-    // can't push past the top-left corner
-    const clamped = layoutChart([root], shiftAll(base, -9999, -9999));
-    expect(Math.min(...clamped.cards.map((c) => c.x))).toBe(0);
-    expect(Math.min(...clamped.cards.map((c) => c.y))).toBe(0);
+    const moved = layoutChart([root], shiftSelected(base, new Set([b.id]), 40, 16));
+    for (const c of base.cards) {
+      const m = moved.cards.find((x) => x.node.id === c.node.id)!;
+      expect(m).toMatchObject(c.node.id === b.id ? { x: c.x + 40, y: c.y + 16 } : { x: c.x, y: c.y });
+    }
+    const busOf = (l: typeof base, id: string) => l.buses.find((x) => x.parentId === id)!.y;
+    expect(busOf(moved, b.id)).toBe(busOf(base, b.id) + 16);
+    expect(busOf(moved, root.id)).toBe(busOf(base, root.id));
+    // clamped at the origin
+    const clamped = layoutChart([root], shiftSelected(base, new Set([root.id]), 0, -9999));
+    expect(clamped.cards.find((x) => x.node.id === root.id)!.y).toBe(0);
   });
 });
-
