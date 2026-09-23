@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTree, listDivisi, withAncestors, type Person } from "./tree";
+import { buildTree, isStaffPosition, listDivisi, splitStaff, withAncestors, type Person, type PersonNode } from "./tree";
 
 const people: Person[] = [
   { id: "a", nama: "Alice", jabatan: "Direktur", divisi: null, jobdesk: null, fotoUrl: null, atasanId: null },
@@ -66,5 +66,38 @@ describe("listDivisi", () => {
 
   it("returns an empty array when no one has a divisi", () => {
     expect(listDivisi([{ id: "a", nama: "A", jabatan: "X", divisi: null, jobdesk: null, fotoUrl: null, atasanId: null }])).toEqual([]);
+  });
+});
+
+describe("isStaffPosition", () => {
+  it("matches Wakil Direktur and Sekretaris, case-insensitively", () => {
+    expect(isStaffPosition("Wakil Direktur")).toBe(true);
+    expect(isStaffPosition("wakil direktur utama")).toBe(true);
+    expect(isStaffPosition("SEKRETARIS")).toBe(true);
+    expect(isStaffPosition("Sekretaris Direktur")).toBe(true);
+  });
+
+  it("does not match ordinary positions", () => {
+    expect(isStaffPosition("Direktur")).toBe(false);
+    expect(isStaffPosition("Manager")).toBe(false);
+    expect(isStaffPosition("Staff")).toBe(false);
+  });
+});
+
+describe("splitStaff", () => {
+  const children: PersonNode[] = [
+    { id: "1", nama: "A", jabatan: "Wakil Direktur", divisi: null, jobdesk: null, fotoUrl: null, children: [] },
+    { id: "2", nama: "B", jabatan: "Sekretaris", divisi: null, jobdesk: null, fotoUrl: null, children: [] },
+    { id: "3", nama: "C", jabatan: "Manager", divisi: null, jobdesk: null, fotoUrl: null, children: [] },
+  ];
+
+  it("separates staff positions from regular line reports", () => {
+    const { staff, line } = splitStaff(children);
+    expect(staff.map((p) => p.id)).toEqual(["1", "2"]);
+    expect(line.map((p) => p.id)).toEqual(["3"]);
+  });
+
+  it("returns empty arrays for no children", () => {
+    expect(splitStaff([])).toEqual({ staff: [], line: [] });
   });
 });

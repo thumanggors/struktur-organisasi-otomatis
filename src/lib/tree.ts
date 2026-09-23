@@ -64,3 +64,15 @@ export function listDivisi(people: Person[]): string[] {
     (a, b) => a.localeCompare(b)
   );
 }
+
+/** Deputy/secretary-style positions get a side branch in the chart instead of the main line. */
+export function isStaffPosition(jabatan: string): boolean {
+  return /wakil direktur|sekretaris/i.test(jabatan);
+}
+
+/** Splits a node's children into staff (side branch) and line (normal cascade) reports. */
+export function splitStaff(children: PersonNode[]): { staff: PersonNode[]; line: PersonNode[] } {
+  const staff = children.filter((c) => isStaffPosition(c.jabatan));
+  const line = children.filter((c) => !isStaffPosition(c.jabatan));
+  return { staff, line };
+}

@@ -3,6 +3,7 @@
 import { Tree, TreeNode } from "react-organizational-chart";
 import { User } from "lucide-react";
 import type { PersonNode } from "@/lib/tree";
+import { splitStaff } from "@/lib/tree";
 import { divisiColor } from "@/lib/divisiColor";
 
 const NEUTRAL_ACCENT = "border-l-slate-800";
@@ -32,10 +33,42 @@ function Card({ node }: { node: PersonNode }) {
   );
 }
 
-function renderNode(node: PersonNode) {
+/** A Wakil Direktur/Sekretaris and (if any) their own reports, still nested below them. */
+function StaffBranch({ node }: { node: PersonNode }) {
+  if (node.children.length === 0) return <Card node={node} />;
   return (
-    <TreeNode key={node.id} label={<Card node={node} />}>
+    <Tree label={<Card node={node} />} lineWidth="2px" lineColor="#cbd5e1" lineBorderRadius="8px">
       {renderChildren(node.children)}
+    </Tree>
+  );
+}
+
+/** A node's own card, plus any staff positions branching off to its right. */
+function NodeLabel({ node, staff }: { node: PersonNode; staff: PersonNode[] }) {
+  if (staff.length === 0) return <Card node={node} />;
+  return (
+    <div className="flex items-start">
+      <Card node={node} />
+      <div className="ml-3 flex flex-col justify-center gap-3 self-center border-l-2 border-slate-300 pl-3">
+        {staff.map((s) => (
+          <div key={s.id} className="relative">
+            <div
+              className="absolute top-1/2 -left-3 h-0.5 w-3 -translate-y-1/2 bg-slate-300"
+              aria-hidden="true"
+            />
+            <StaffBranch node={s} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function renderNode(node: PersonNode) {
+  const { staff, line } = splitStaff(node.children);
+  return (
+    <TreeNode key={node.id} label={<NodeLabel node={node} staff={staff} />}>
+      {renderChildren(line)}
     </TreeNode>
   );
 }
@@ -81,11 +114,20 @@ export default function OrgChart({
           {companyName && <h2 className="text-lg font-semibold text-slate-900">{companyName}</h2>}
         </div>
       )}
-      {roots.map((root) => (
-        <Tree key={root.id} label={<Card node={root} />} lineWidth="2px" lineColor="#cbd5e1" lineBorderRadius="8px">
-          {renderChildren(root.children)}
-        </Tree>
-      ))}
+      {roots.map((root) => {
+        const { staff, line } = splitStaff(root.children);
+        return (
+          <Tree
+            key={root.id}
+            label={<NodeLabel node={root} staff={staff} />}
+            lineWidth="2px"
+            lineColor="#cbd5e1"
+            lineBorderRadius="8px"
+          >
+            {renderChildren(line)}
+          </Tree>
+        );
+      })}
     </div>
   );
 }
