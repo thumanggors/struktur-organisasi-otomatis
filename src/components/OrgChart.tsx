@@ -3,11 +3,12 @@
 import { Tree, TreeNode } from "react-organizational-chart";
 import { User } from "lucide-react";
 import type { PersonNode } from "@/lib/tree";
+import { divisiColor } from "@/lib/divisiColor";
 
-const LEVEL_ACCENTS = ["border-l-slate-900", "border-l-sky-600", "border-l-emerald-600", "border-l-amber-500"];
+const NEUTRAL_ACCENT = "border-l-slate-800";
 
-function Card({ node, depth }: { node: PersonNode; depth: number }) {
-  const accent = LEVEL_ACCENTS[depth % LEVEL_ACCENTS.length];
+function Card({ node }: { node: PersonNode }) {
+  const accent = node.divisi ? divisiColor(node.divisi).border : NEUTRAL_ACCENT;
   return (
     <div
       className={`inline-flex min-w-[11rem] flex-col items-center gap-1 rounded-lg border border-slate-200 border-l-4 bg-white p-3 text-center shadow-sm ${accent}`}
@@ -23,21 +24,23 @@ function Card({ node, depth }: { node: PersonNode; depth: number }) {
       <p className="font-semibold text-slate-900">{node.nama}</p>
       <p className="text-sm text-slate-500">{node.jabatan}</p>
       {node.divisi && (
-        <span className="mt-0.5 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">{node.divisi}</span>
+        <span className={`mt-0.5 rounded-full px-2 py-0.5 text-xs font-medium ${divisiColor(node.divisi).badge}`}>
+          {node.divisi}
+        </span>
       )}
     </div>
   );
 }
 
-function renderNode(node: PersonNode, depth: number) {
+function renderNode(node: PersonNode) {
   return (
-    <TreeNode key={node.id} label={<Card node={node} depth={depth} />}>
-      {renderChildren(node.children, depth + 1)}
+    <TreeNode key={node.id} label={<Card node={node} />}>
+      {renderChildren(node.children)}
     </TreeNode>
   );
 }
 
-function renderChildren(children: PersonNode[], depth: number) {
+function renderChildren(children: PersonNode[]) {
   const allLeaves = children.every((c) => c.children.length === 0);
 
   if (children.length > 3 && allLeaves) {
@@ -46,7 +49,7 @@ function renderChildren(children: PersonNode[], depth: number) {
         label={
           <div className="grid grid-cols-2 gap-2">
             {children.map((child) => (
-              <Card key={child.id} node={child} depth={depth} />
+              <Card key={child.id} node={child} />
             ))}
           </div>
         }
@@ -54,7 +57,7 @@ function renderChildren(children: PersonNode[], depth: number) {
     );
   }
 
-  return children.map((child) => renderNode(child, depth));
+  return children.map((child) => renderNode(child));
 }
 
 export default function OrgChart({ roots }: { roots: PersonNode[] }) {
@@ -65,8 +68,8 @@ export default function OrgChart({ roots }: { roots: PersonNode[] }) {
   return (
     <div id="org-chart-capture" className="inline-block bg-white p-4">
       {roots.map((root) => (
-        <Tree key={root.id} label={<Card node={root} depth={0} />} lineWidth="2px" lineColor="#cbd5e1" lineBorderRadius="8px">
-          {renderChildren(root.children, 1)}
+        <Tree key={root.id} label={<Card node={root} />} lineWidth="2px" lineColor="#cbd5e1" lineBorderRadius="8px">
+          {renderChildren(root.children)}
         </Tree>
       ))}
       <p className="mt-4 text-right text-xs text-slate-300">by. Pictor R. Tumanggor</p>

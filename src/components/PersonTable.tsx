@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Pencil, Trash2, User } from "lucide-react";
+import { divisiColor } from "@/lib/divisiColor";
 
 type Person = {
   id: string;
@@ -52,7 +53,7 @@ export default function PersonTable({ people }: { people: Person[] }) {
             <td className="px-4 py-3 text-slate-600">{p.jabatan}</td>
             <td className="px-4 py-3">
               {p.divisi ? (
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{p.divisi}</span>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${divisiColor(p.divisi).badge}`}>{p.divisi}</span>
               ) : (
                 <span className="text-slate-400">-</span>
               )}

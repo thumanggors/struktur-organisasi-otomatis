@@ -51,16 +51,16 @@ export default function ExportButtons() {
     <div className="mb-4 flex flex-wrap items-center gap-2">
       <button
         onClick={handleExportPng}
-        className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+        className="flex cursor-pointer items-center gap-2 rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-sky-50"
       >
-        <ImageDown className="h-4 w-4" aria-hidden="true" />
+        <ImageDown className="h-4 w-4 text-sky-600" aria-hidden="true" />
         Export PNG
       </button>
       <button
         onClick={handleExportPdf}
-        className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+        className="flex cursor-pointer items-center gap-2 rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-rose-50"
       >
-        <FileDown className="h-4 w-4" aria-hidden="true" />
+        <FileDown className="h-4 w-4 text-rose-600" aria-hidden="true" />
         Export PDF
       </button>
       {error && <p className="text-sm text-red-600">{error}</p>}

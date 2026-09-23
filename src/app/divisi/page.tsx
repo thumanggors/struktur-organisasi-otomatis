@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { buildTree, listDivisi, withAncestors } from "@/lib/tree";
+import { divisiColor } from "@/lib/divisiColor";
 import OrgChart from "@/components/OrgChartLazy";
 import ExportButtons from "@/components/ExportButtonsLazy";
 
@@ -34,19 +35,20 @@ export default async function DivisiPage({
         </p>
       ) : (
         <div className="mt-6 flex flex-wrap gap-2">
-          {divisiList.map((d) => (
-            <Link
-              key={d}
-              href={`/divisi?divisi=${encodeURIComponent(d)}`}
-              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                d === divisi
-                  ? "bg-sky-600 text-white shadow-sm"
-                  : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
-              }`}
-            >
-              {d}
-            </Link>
-          ))}
+          {divisiList.map((d) => {
+            const color = divisiColor(d);
+            return (
+              <Link
+                key={d}
+                href={`/divisi?divisi=${encodeURIComponent(d)}`}
+                className={`rounded-full px-4 py-1.5 text-sm font-medium shadow-sm transition-colors ${
+                  d === divisi ? `${color.solid} text-white` : `${color.badge} hover:brightness-95`
+                }`}
+              >
+                {d}
+              </Link>
+            );
+          })}
         </div>
       )}
 
