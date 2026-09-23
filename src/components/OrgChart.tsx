@@ -5,7 +5,10 @@ import type { PersonNode } from "@/lib/tree";
 
 function Card({ node }: { node: PersonNode }) {
   return (
-    <div className="inline-flex flex-col items-center gap-1 rounded border bg-white p-3 shadow-sm">
+    <div
+      className="inline-flex flex-col items-center gap-1 rounded border bg-white p-3 shadow-sm"
+      title={node.jobdesk || undefined}
+    >
       {node.fotoUrl ? (
         <img src={node.fotoUrl} alt={node.nama} className="h-14 w-14 rounded-full object-cover" />
       ) : (

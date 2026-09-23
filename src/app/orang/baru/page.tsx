@@ -1,6 +1,8 @@
 import { db } from "@/lib/db";
 import PersonForm from "@/components/PersonForm";
 
+export const dynamic = "force-dynamic";
+
 export default async function NewPersonPage() {
   const allPeople = await db.person.findMany({ select: { id: true, nama: true }, orderBy: { nama: "asc" } });
 

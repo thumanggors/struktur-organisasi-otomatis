@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -23,7 +24,17 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <nav className="flex gap-4 border-b px-6 py-3">
+          <Link href="/" className="text-sm font-medium underline">
+            Struktur Organisasi
+          </Link>
+          <Link href="/orang" className="text-sm font-medium underline">
+            Kelola Orang
+          </Link>
+        </nav>
+        {children}
+      </body>
     </html>
   );
 }

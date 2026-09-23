@@ -2,6 +2,8 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import PersonTable from "@/components/PersonTable";
 
+export const dynamic = "force-dynamic";
+
 export default async function OrangPage() {
   const people = await db.person.findMany({ orderBy: { nama: "asc" } });
 

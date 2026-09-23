@@ -1,7 +1,9 @@
 import { db } from "@/lib/db";
 import { buildTree } from "@/lib/tree";
-import OrgChart from "@/components/OrgChart";
-import ExportButtons from "@/components/ExportButtons";
+import OrgChart from "@/components/OrgChartLazy";
+import ExportButtons from "@/components/ExportButtonsLazy";
+
+export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const people = await db.person.findMany();
