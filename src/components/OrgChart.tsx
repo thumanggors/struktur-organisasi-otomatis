@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { User } from "lucide-react";
+import { Network, User } from "lucide-react";
 import type { PersonNode } from "@/lib/tree";
 import { CARD_H, CARD_W, cardsInRect, layoutChart, shiftSelected, EMPTY_MANUAL, SIDES, type LineHandle, type ManualLayout, type Side, type Pos, type Rect } from "@/lib/layout";
 import { divisiColorFor, type DivisiColorMap, type DivisiColorSet } from "@/lib/divisiColor";
@@ -57,6 +57,8 @@ export default function OrgChart({
   onMoveCard,
   onMoveLine,
   onSetSide,
+  onSetVia,
+  onRelayout,
   selected,
   onSelect,
   onReplace,
@@ -71,6 +73,10 @@ export default function OrgChart({
   onMoveLine?: (prop: LineHandle["prop"], id: string, value: number) => void;
   /** Picks which side of a report's card the line from its boss attaches to. */
   onSetSide?: (id: string, side: Side) => void;
+  /** Hangs a report's connector off another person's lines (null = back to the boss's). */
+  onSetVia?: (id: string, via: string | null) => void;
+  /** Re-lays everyone under this card out in horizontal rows. */
+  onRelayout?: (id: string) => void;
   /** Box-selected cards; dragging any of them moves the whole selection. */
   selected?: Set<string>;
   onSelect?: (ids: Set<string>) => void;
@@ -80,6 +86,13 @@ export default function OrgChart({
   const editing = !!onMoveCard;
   const canvasRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState<Rect | null>(null);
+  const [linkDraft, setLinkDraft] = useState<Rect | null>(null);
+  const bossOf = useMemo(() => {
+    const m = new Map<string, string>();
+    const walk = (n: PersonNode) => n.children.forEach((c) => (m.set(c.id, n.id), walk(c)));
+    roots.forEach(walk);
+    return m;
+  }, [roots]);
   const hasSelection = !!selected && selected.size > 0;
 
   // Esc drops the selection.
@@ -148,6 +161,42 @@ export default function OrgChart({
     window.addEventListener("pointerup", up);
   }
 
+  /**
+   * Dragging a side dot: drop it on another person's card or line to draw this
+   * report's connector from their lines (on the real boss = back to normal).
+   * A plain click is handled by the dot's onClick (pick the side).
+   */
+  function linkGesture(e: React.PointerEvent, id: string, side: Side, from: Pos) {
+    const el = canvasRef.current;
+    if (!el || e.button !== 0) return;
+    e.stopPropagation();
+    const rect = el.getBoundingClientRect();
+    const scale = rect.width / el.offsetWidth || 1;
+    const toChart = (cx: number, cy: number) => ({ x: (cx - rect.left) / scale, y: (cy - rect.top) / scale });
+    const sx = e.clientX, sy = e.clientY;
+    let moved = false;
+    const move = (ev: PointerEvent) => {
+      if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
+      moved = true;
+      const p = toChart(ev.clientX, ev.clientY);
+      setLinkDraft({ x1: from.x, y1: from.y, x2: p.x, y2: p.y });
+    };
+    const up = (ev: PointerEvent) => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      setLinkDraft(null);
+      if (!moved) return;
+      const target = document
+        .elementFromPoint(ev.clientX, ev.clientY)
+        ?.closest<HTMLElement>("[data-link-target]")?.dataset.linkTarget;
+      if (!target || target === id) return;
+      onSetSide?.(id, side);
+      onSetVia?.(id, target === bossOf.get(id) ? null : target);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  }
+
   if (roots.length === 0) {
     return <p className="text-slate-500">Belum ada data orang.</p>;
   }
@@ -167,7 +216,18 @@ export default function OrgChart({
         className={`relative ${editing ? "select-none bg-[radial-gradient(circle,#e2e8f0_1px,transparent_1px)] [background-size:16px_16px]" : ""}`}
         style={{ width: layout.width + (editing ? CARD_W : 0), height: layout.height + (editing ? CARD_H : 0) }}
       >
-        <svg className="absolute inset-0 h-full w-full" aria-hidden="true">
+        <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true">
+          {linkDraft && (
+            <line
+              x1={linkDraft.x1}
+              y1={linkDraft.y1}
+              x2={linkDraft.x2}
+              y2={linkDraft.y2}
+              stroke="#0ea5e9"
+              strokeWidth={3}
+              strokeDasharray="6 4"
+            />
+          )}
           {layout.lines.map((pts, i) => (
             <polyline
               key={i}
@@ -182,6 +242,7 @@ export default function OrgChart({
         {layout.cards.map(({ node, x, y }) => (
           <div
             key={node.id}
+            data-link-target={node.id}
             className={`group absolute ${
               !editing
                 ? ""
@@ -193,6 +254,18 @@ export default function OrgChart({
             onPointerDown={editing ? (e) => gesture(e, { from: { x, y }, id: node.id, apply: (p) => onMoveCard!(node.id, p) }) : undefined}
           >
             <Card node={node} colorMap={colorMap} />
+            {onRelayout && node.children.length > 0 && (
+              <button
+                type="button"
+                title="Susun horizontal: rapikan semua bawahan kartu ini berjajar mendatar"
+                aria-label={`Susun horizontal bawahan ${node.nama}`}
+                className="absolute right-1.5 bottom-1.5 z-10 flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-sky-200 bg-white text-sky-600 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 hover:bg-sky-50 focus-visible:opacity-100"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => onRelayout(node.id)}
+              >
+                <Network className="h-4 w-4" aria-hidden="true" />
+              </button>
+            )}
             {onSetSide &&
               layout.sides[node.id] &&
               SIDES.map((side) => {
@@ -201,7 +274,7 @@ export default function OrgChart({
                   <button
                     key={side}
                     type="button"
-                    title={`Garis menempel di sisi ${SIDE_DOT[side].label}`}
+                    title={`Klik: garis menempel di sisi ${SIDE_DOT[side].label}. Tarik ke kartu/garis orang lain untuk menyambung ke garisnya.`}
                     aria-label={`Tempelkan garis di sisi ${SIDE_DOT[side].label}`}
                     aria-pressed={active}
                     className={`absolute z-10 h-4 w-4 -translate-x-1/2 -translate-y-1/2 cursor-pointer rounded-full border-2 transition-opacity ${
@@ -210,7 +283,10 @@ export default function OrgChart({
                         : "border-sky-500 bg-white opacity-0 group-hover:opacity-100 hover:bg-sky-100"
                     }`}
                     style={SIDE_DOT[side].style}
-                    onPointerDown={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => {
+                      const dot = { top: [0.5, 0], bottom: [0.5, 1], left: [0, 0.5], right: [1, 0.5] }[side];
+                      linkGesture(e, node.id, side, { x: x + dot[0] * CARD_W, y: y + dot[1] * CARD_H });
+                    }}
                     onClick={() => onSetSide(node.id, side)}
                   />
                 );
@@ -227,6 +303,7 @@ export default function OrgChart({
             return (
               <div
                 key={`${h.prop}-${h.id}`}
+                data-link-target={h.owner}
                 title={horizontal ? "Geser naik/turun" : "Geser kiri/kanan"}
                 className={`group absolute flex items-center justify-center ${horizontal ? "cursor-ns-resize" : "cursor-ew-resize"}`}
                 style={

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Move, Save, X, RotateCcw } from "lucide-react";
 import OrgChart from "@/components/OrgChartLazy";
 import ZoomableChart from "@/components/ZoomableChart";
-import { EMPTY_MANUAL, layoutChart, type ManualLayout } from "@/lib/layout";
+import { EMPTY_MANUAL, layoutChart, relayoutBranch, type ManualLayout } from "@/lib/layout";
 import type { PersonNode } from "@/lib/tree";
 import type { DivisiColorMap } from "@/lib/divisiColor";
 
@@ -62,6 +62,7 @@ export default function EditableOrgChart({
       trunkX: d.trunkX[id] ?? null,
       linkOff: d.linkOff[id] ?? null,
       linkSide: d.linkSide[id] ?? null,
+      linkVia: d.linkVia[id] ?? null,
     }));
     const pos = Object.fromEntries(cards.map((c) => [c.node.id, { x: c.x, y: c.y }]));
     send("PUT", { ...d, pos }, { items });
@@ -88,10 +89,10 @@ export default function EditableOrgChart({
               <RotateCcw className="h-4 w-4 text-amber-600" aria-hidden="true" />
               Reset Otomatis
             </button>
-            <span className="text-sm text-slate-500">
+            <span className="min-h-15 basis-full text-sm text-slate-500">
               {selected.size > 0
                 ? `${selected.size} kartu terblok — geser salah satunya untuk memindahkan semuanya. Klik area kosong atau Esc untuk batal.`
-                : "Geser kartu atau garis. Arahkan ke kartu lalu klik titik di sisinya untuk memilih sisi tempat garis menempel. Tarik di area kosong (atau tekan lama lalu tarik) untuk memblok beberapa kartu."}
+                : "Geser kartu atau garis. Arahkan ke kartu: klik titik di sisinya untuk memilih sisi garis, atau tarik titik itu ke kartu/garis orang lain untuk menyambung ke garisnya. Tombol di pojok kanan bawah kartu menyusun bawahannya horizontal. Tarik di area kosong (atau tekan lama lalu tarik) untuk memblok beberapa kartu."}
             </span>
           </>
         ) : (
@@ -123,6 +124,19 @@ export default function EditableOrgChart({
                   })
               : undefined
           }
+          onSetVia={
+            draft
+              ? (id, via) =>
+                  setDraft((d) => {
+                    if (!d) return d;
+                    const linkVia = { ...d.linkVia };
+                    if (via) linkVia[id] = via;
+                    else delete linkVia[id];
+                    return { ...d, linkVia };
+                  })
+              : undefined
+          }
+          onRelayout={draft ? (id) => setDraft((d) => d && relayoutBranch(roots, d, id)) : undefined}
           selected={draft ? selected : undefined}
           onSelect={setSelected}
           onReplace={setDraft}

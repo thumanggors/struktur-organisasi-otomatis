@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { SIDES, type Side } from "@/lib/layout";
 
 const LINE_FIELDS = ["busY", "trunkX", "linkOff"] as const;
-type Item = { id: string; posX: number; posY: number; linkSide: Side | null } & Record<
+type Item = { id: string; posX: number; posY: number; linkSide: Side | null; linkVia: string | null } & Record<
   (typeof LINE_FIELDS)[number],
   number | null
 >;
@@ -14,7 +14,8 @@ const valid = (i: Item) =>
   num(i.posX) &&
   num(i.posY) &&
   LINE_FIELDS.every((f) => i[f] === null || num(i[f])) &&
-  (i.linkSide === null || SIDES.includes(i.linkSide));
+  (i.linkSide === null || SIDES.includes(i.linkSide)) &&
+  (i.linkVia === null || typeof i.linkVia === "string");
 
 /** Saves a full snapshot of manual chart positions and line tweaks. */
 export async function PUT(req: NextRequest) {
@@ -25,8 +26,8 @@ export async function PUT(req: NextRequest) {
   }
 
   await db.$transaction(
-    (items as Item[]).map(({ id, posX, posY, busY, trunkX, linkOff, linkSide }) =>
-      db.person.updateMany({ where: { id }, data: { posX, posY, busY, trunkX, linkOff, linkSide } })
+    (items as Item[]).map(({ id, posX, posY, busY, trunkX, linkOff, linkSide, linkVia }) =>
+      db.person.updateMany({ where: { id }, data: { posX, posY, busY, trunkX, linkOff, linkSide, linkVia } })
     )
   );
   return NextResponse.json({ ok: true });
@@ -34,6 +35,6 @@ export async function PUT(req: NextRequest) {
 
 /** Back to the automatic layout. */
 export async function DELETE() {
-  await db.person.updateMany({ data: { posX: null, posY: null, busY: null, trunkX: null, linkOff: null, linkSide: null } });
+  await db.person.updateMany({ data: { posX: null, posY: null, busY: null, trunkX: null, linkOff: null, linkSide: null, linkVia: null } });
   return NextResponse.json({ ok: true });
 }

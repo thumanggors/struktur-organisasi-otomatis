@@ -31,6 +31,8 @@ model Person {
   linkOff   Float?
   /// top | bottom | left | right: side of this card the line from the boss attaches to.
   linkSide  String?
+  /// Person id whose lines this card's connector is drawn from instead of the boss's (visual only).
+  linkVia   String?
   atasan    Person?  @relation("Reports", fields: [atasanId], references: [id])
   bawahan   Person[] @relation("Reports")
   createdAt DateTime @default(now())

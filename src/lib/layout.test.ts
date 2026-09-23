@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CARD_H, CARD_W, cardsInRect, layoutChart, shiftSelected, EMPTY_MANUAL } from "./layout";
+import { CARD_H, CARD_W, cardsInRect, layoutChart, relayoutBranch, shiftSelected, EMPTY_MANUAL } from "./layout";
 import type { PersonNode } from "./tree";
 
 let seq = 0;
@@ -146,6 +146,94 @@ describe("layoutChart", () => {
     const l = layoutChart([n("Direktur", [s, m])]);
     expect(l.sides[m.id]).toBe("top");
     expect(l.sides[s.id]).toBe("left");
+  });
+
+  it("lays every branch out horizontally, even many leaf reports", () => {
+    const kids = Array.from({ length: 7 }, () => n("Permit"));
+    const l = layoutChart([n("PM", kids)]);
+    const ys = new Set(kids.map((k) => l.cards.find((c) => c.node.id === k.id)!.y));
+    expect(ys.size).toBe(1);
+  });
+
+  it("can hang a report's connector off another person's line", () => {
+    const b = n("B");
+    const other = n("Other");
+    const root = n("A", [b, n("C", [other])]);
+    const l = layoutChart([root], { ...EMPTY_MANUAL, linkVia: { [b.id]: other.id } });
+    const drop = l.handles.find((h) => h.prop === "linkOff" && h.id === b.id)!;
+    expect(drop.owner).toBe(other.id);
+    // Other now has its own trunk + bus even though nobody reports to it
+    expect(l.handles.some((h) => h.prop === "trunkX" && h.id === other.id)).toBe(true);
+    // unknown or self "via" falls back to the real boss
+    const back = layoutChart([root], { ...EMPTY_MANUAL, linkVia: { [b.id]: b.id } });
+    expect(back.handles.find((h) => h.prop === "linkOff" && h.id === b.id)!.owner).toBe(root.id);
+  });
+
+  it("relayoutBranch lines a branch up horizontally under its head, leaving the rest alone", () => {
+    const kids = [n("P1"), n("P2"), n("P3"), n("P4")];
+    const pm = n("PM", kids);
+    const other = n("Other");
+    const root = n("Dir", [pm, other]);
+    // messy saved layout: kids stacked vertically, PM moved
+    const messy = {
+      ...EMPTY_MANUAL,
+      pos: {
+        [pm.id]: { x: 500, y: 400 },
+        [other.id]: { x: 0, y: 400 },
+        ...Object.fromEntries(kids.map((k, i) => [k.id, { x: 500, y: 700 + i * 200 }])),
+      },
+      linkSide: { [kids[0].id]: "left" as const },
+    };
+    const next = relayoutBranch([root], messy, pm.id);
+    const l = layoutChart([root], next);
+    const at = (id: string) => l.cards.find((c) => c.node.id === id)!;
+    expect(at(pm.id)).toMatchObject({ x: 500, y: 400 });
+    expect(at(other.id)).toMatchObject({ x: 0, y: 400 });
+    expect(new Set(kids.map((k) => at(k.id).y)).size).toBe(1);
+    expect(at(kids[0].id).y).toBeGreaterThan(400 + CARD_H);
+    expect(next.linkSide[kids[0].id]).toBeUndefined();
+  });
+
+  const overlapping = (cards: { node: PersonNode; x: number; y: number }[]) =>
+    cards.flatMap((a, i) =>
+      cards
+        .slice(i + 1)
+        .filter((b) => a.x < b.x + CARD_W && b.x < a.x + CARD_W && a.y < b.y + CARD_H && b.y < a.y + CARD_H)
+        .map((b) => `${a.node.nama}/${b.node.nama}`)
+    );
+
+  it("puts people added after a hand-arranged save into free space, never on a card", () => {
+    const kids = [n("K1"), n("K2"), n("K3")];
+    const boss = n("Boss", kids);
+    const root = n("Dir", [boss]);
+    const saved = layoutChart([root]);
+    const manual = { ...EMPTY_MANUAL, pos: Object.fromEntries(saved.cards.map((c) => [c.node.id, { x: c.x, y: c.y }])) };
+    // two newcomers under Boss and one under a newcomer
+    const nb = n("New B", [n("New C")]);
+    boss.children.push(n("New A"), nb);
+    const l = layoutChart([root], manual);
+    expect(l.cards).toHaveLength(8);
+    expect(overlapping(l.cards)).toEqual([]);
+    // the saved cards stayed put
+    for (const c of saved.cards) expect(l.cards.find((x) => x.node.id === c.node.id)).toMatchObject({ x: c.x, y: c.y });
+  });
+
+  it("relayoutBranch moves neighbours the widened branch would cover", () => {
+    const kids = Array.from({ length: 6 }, (_, i) => n(`P${i}`));
+    const pm = n("PM", kids);
+    const neighbour = n("Neighbour");
+    const root = n("Dir", [pm, neighbour]);
+    const cramped = {
+      ...EMPTY_MANUAL,
+      pos: {
+        [root.id]: { x: 400, y: 0 },
+        [pm.id]: { x: 400, y: 300 },
+        [neighbour.id]: { x: 700, y: 600 }, // right where the new row will go
+        ...Object.fromEntries(kids.map((k, i) => [k.id, { x: 400, y: 600 + i * 200 }])),
+      },
+    };
+    const l = layoutChart([root], relayoutBranch([root], cramped, pm.id));
+    expect(overlapping(l.cards)).toEqual([]);
   });
 });
 

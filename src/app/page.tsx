@@ -19,6 +19,7 @@ export default async function HomePage() {
     if (p.trunkX !== null) saved.trunkX[p.id] = p.trunkX;
     if (p.linkOff !== null) saved.linkOff[p.id] = p.linkOff;
     if (SIDES.includes(p.linkSide as Side)) saved.linkSide[p.id] = p.linkSide as Side;
+    if (p.linkVia !== null) saved.linkVia[p.id] = p.linkVia;
   }
 
   return (
