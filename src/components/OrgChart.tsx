@@ -55,15 +55,16 @@ function NodeLabel({ node, staff }: { node: PersonNode; staff: PersonNode[] }) {
   return (
     <div className="inline-flex flex-col items-center">
       <Card node={node} />
-      <div className="grid grid-cols-[auto_1fr]">
-        <div className="mx-auto w-0.5 bg-slate-300" aria-hidden="true" />
-        <div className="flex flex-col justify-center gap-3 py-2">
+      {/* Equal side columns keep the trunk exactly under the card's center. */}
+      <div className="grid grid-cols-[1fr_2px_1fr]">
+        <div aria-hidden="true" />
+        <div className="bg-slate-300" aria-hidden="true" />
+        <div className="flex flex-col gap-4 pt-4 pb-6">
           {staff.map((s) => (
-            <div key={s.id} className="relative flex items-center">
-              <div className="absolute top-1/2 -left-5 h-0.5 w-5 -translate-y-1/2 bg-slate-300" aria-hidden="true" />
-              <div className="pl-5">
-                <StaffBranch node={s} />
-              </div>
+            <div key={s.id} className="flex items-start">
+              {/* mt-16 ≈ half a card's height, so the tick meets the staff card itself, not its subtree. */}
+              <div className="mt-16 h-0.5 w-6 shrink-0 bg-slate-300" aria-hidden="true" />
+              <StaffBranch node={s} />
             </div>
           ))}
         </div>
