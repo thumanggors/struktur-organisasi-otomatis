@@ -61,6 +61,7 @@ export default function EditableOrgChart({
       busY: d.busY[id] ?? null,
       trunkX: d.trunkX[id] ?? null,
       linkOff: d.linkOff[id] ?? null,
+      linkSide: d.linkSide[id] ?? null,
     }));
     const pos = Object.fromEntries(cards.map((c) => [c.node.id, { x: c.x, y: c.y }]));
     send("PUT", { ...d, pos }, { items });
@@ -90,7 +91,7 @@ export default function EditableOrgChart({
             <span className="text-sm text-slate-500">
               {selected.size > 0
                 ? `${selected.size} kartu terblok — geser salah satunya untuk memindahkan semuanya. Klik area kosong atau Esc untuk batal.`
-                : "Geser kartu, atau garis mana pun (titik biru muncul saat diarahkan). Tarik di area kosong (atau tekan lama lalu tarik) untuk memblok beberapa kartu."}
+                : "Geser kartu atau garis. Arahkan ke kartu lalu klik titik di sisinya untuk memilih sisi tempat garis menempel. Tarik di area kosong (atau tekan lama lalu tarik) untuk memblok beberapa kartu."}
             </span>
           </>
         ) : (
@@ -110,6 +111,18 @@ export default function EditableOrgChart({
           manual={draft ?? committed ?? saved}
           onMoveCard={draft ? (id, p) => setDraft((d) => d && { ...d, pos: { ...d.pos, [id]: p } }) : undefined}
           onMoveLine={draft ? (prop, id, v) => setDraft((d) => d && { ...d, [prop]: { ...d[prop], [id]: v } }) : undefined}
+          onSetSide={
+            draft
+              ? (id, side) =>
+                  setDraft((d) => {
+                    if (!d) return d;
+                    // The offset means x on top/bottom but y on left/right, so start fresh.
+                    const linkOff = { ...d.linkOff };
+                    delete linkOff[id];
+                    return { ...d, linkSide: { ...d.linkSide, [id]: side }, linkOff };
+                  })
+              : undefined
+          }
           selected={draft ? selected : undefined}
           onSelect={setSelected}
           onReplace={setDraft}

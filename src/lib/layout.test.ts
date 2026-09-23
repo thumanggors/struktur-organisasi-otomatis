@@ -112,4 +112,40 @@ describe("layoutChart", () => {
     expect(tick.axis).toBe("y");
     expect(tick.y1).toBe(l.cards.find((x) => x.node.id === s.id)!.y + 30);
   });
+
+  it("attaches a report's connector to whichever side is chosen", () => {
+    const b = n("Manager");
+    const root = n("Direktur", [b, n("Manager")]);
+    const at = (side: "top" | "bottom" | "left" | "right") => {
+      const l = layoutChart([root], { ...EMPTY_MANUAL, linkSide: { [b.id]: side } });
+      const c = l.cards.find((x) => x.node.id === b.id)!;
+      const ends = l.lines.map((line) => line.at(-1)!);
+      return { l, c, ends };
+    };
+
+    let { l, c, ends } = at("top");
+    expect(l.sides[b.id]).toBe("top");
+    expect(ends).toContainEqual([c.x + CARD_W / 2, c.y]);
+
+    ({ l, c, ends } = at("left"));
+    expect(ends).toContainEqual([c.x, c.y + CARD_H / 2]);
+
+    ({ l, c, ends } = at("right"));
+    expect(ends).toContainEqual([c.x + CARD_W, c.y + CARD_H / 2]);
+
+    ({ l, c, ends } = at("bottom"));
+    expect(ends).toContainEqual([c.x + CARD_W / 2, c.y + CARD_H]);
+    // the trunk reaches down to the loop under the card
+    const trunk = l.handles.find((h) => h.prop === "trunkX")!;
+    expect(trunk.y2).toBeGreaterThan(c.y + CARD_H);
+  });
+
+  it("defaults: line reports attach on top, staff on the side facing the trunk", () => {
+    const s = n("Sekretaris");
+    const m = n("Manager");
+    const l = layoutChart([n("Direktur", [s, m])]);
+    expect(l.sides[m.id]).toBe("top");
+    expect(l.sides[s.id]).toBe("left");
+  });
 });
+

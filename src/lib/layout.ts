@@ -18,15 +18,20 @@ export type Edge = { parentId: string; childId: string; kind: LinkKind };
  * Saved hand edits. Line tweaks are stored relative to the card they attach to,
  * so they travel with it: `trunkX` is the parent's trunk x from its card's left;
  * `linkOff` is where a report's own connector meets its card (x from the left
- * for a bus drop, y from the top for a side tick). `busY` is absolute.
+ * on the top/bottom side, y from the top on the left/right side). `busY` is absolute.
  */
+export type Side = "top" | "bottom" | "left" | "right";
+export const SIDES: Side[] = ["top", "bottom", "left", "right"];
+
 export type ManualLayout = {
   pos: Record<string, Pos>;
   busY: Record<string, number>;
   trunkX: Record<string, number>;
   linkOff: Record<string, number>;
+  /** Which side of a report's card its connector attaches to; unset = auto. */
+  linkSide: Record<string, Side>;
 };
-export const EMPTY_MANUAL: ManualLayout = { pos: {}, busY: {}, trunkX: {}, linkOff: {} };
+export const EMPTY_MANUAL: ManualLayout = { pos: {}, busY: {}, trunkX: {}, linkOff: {}, linkSide: {} };
 
 /** A draggable line segment; dragging along `axis` sets `prop[id]` to (coordinate - origin), clamped to [min, max]. */
 export type LineHandle = {
@@ -46,6 +51,8 @@ export type Layout = {
   cards: { node: PersonNode; x: number; y: number }[];
   lines: Point[][];
   handles: LineHandle[];
+  /** Attach side actually used for each report's connector. */
+  sides: Record<string, Side>;
   width: number;
   height: number;
 };
@@ -108,45 +115,68 @@ function layoutNode(node: PersonNode, edges: Edge[]): Sub {
 const ATTACH_MARGIN = 16; // keep connectors this far inside a card's edge
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
-/** Orthogonal connectors derived from final card positions, so they always follow the cards. */
+const BELOW = 24; // how far a bottom-side connector loops under its card
+
+/**
+ * Orthogonal connectors derived from final card positions, so they always follow the cards.
+ * Every report hangs off its boss's trunk: top side via the shared bus, left/right
+ * via a horizontal tick (like Sekretaris), bottom via a loop under the card.
+ */
 function route(pos: Map<string, Pos>, edges: Edge[], manual: ManualLayout) {
   const lines: Point[][] = [];
   const handles: LineHandle[] = [];
+  const sides: Record<string, Side> = {};
   const byParent = new Map<string, Edge[]>();
   for (const e of edges) byParent.set(e.parentId, [...(byParent.get(e.parentId) ?? []), e]);
   // Where a connector meets a card along one side of length `len`.
   const along = (id: string, start: number, len: number) =>
     start + clamp(manual.linkOff[id] ?? len / 2, ATTACH_MARGIN, len - ATTACH_MARGIN);
+  const slideX = (id: string, c: Pos, seg: [number, number, number, number]): LineHandle => ({
+    prop: "linkOff", id, axis: "x", x1: seg[0], y1: seg[1], x2: seg[2], y2: seg[3],
+    origin: c.x, min: c.x + ATTACH_MARGIN, max: c.x + CARD_W - ATTACH_MARGIN,
+  });
+  const slideY = (id: string, c: Pos, seg: [number, number, number, number]): LineHandle => ({
+    prop: "linkOff", id, axis: "y", x1: seg[0], y1: seg[1], x2: seg[2], y2: seg[3],
+    origin: c.y, min: c.y + ATTACH_MARGIN, max: c.y + CARD_H - ATTACH_MARGIN,
+  });
 
   for (const [parentId, kids] of byParent) {
     const p = pos.get(parentId)!;
     const tx = p.x + clamp(manual.trunkX[parentId] ?? CARD_W / 2, ATTACH_MARGIN, CARD_W - ATTACH_MARGIN);
     const bottom = p.y + CARD_H;
     let trunkEnd = bottom;
+    const bus: { id: string; c: Pos }[] = [];
 
-    for (const e of kids.filter((k) => k.kind === "side")) {
-      const c = pos.get(e.childId)!;
-      const cy = along(e.childId, c.y, CARD_H);
-      const edgeX = c.x + CARD_W / 2 >= tx ? c.x : c.x + CARD_W;
-      lines.push([[tx, cy], [edgeX, cy]]);
-      handles.push({
-        prop: "linkOff", id: e.childId, axis: "y", x1: tx, y1: cy, x2: edgeX, y2: cy,
-        origin: c.y, min: c.y + ATTACH_MARGIN, max: c.y + CARD_H - ATTACH_MARGIN,
-      });
-      trunkEnd = Math.max(trunkEnd, cy);
+    for (const e of kids) {
+      const id = e.childId;
+      const c = pos.get(id)!;
+      const auto: Side = e.kind === "bus" ? "top" : c.x + CARD_W / 2 >= tx ? "left" : "right";
+      const side = (sides[id] = manual.linkSide[id] ?? auto);
+
+      if (side === "top") {
+        bus.push({ id, c });
+      } else if (side === "bottom") {
+        const x = along(id, c.x, CARD_W);
+        const y = c.y + CARD_H + BELOW;
+        lines.push([[tx, y], [x, y], [x, c.y + CARD_H]]);
+        handles.push(slideX(id, c, [x, y, x, c.y + CARD_H]));
+        trunkEnd = Math.max(trunkEnd, y);
+      } else {
+        const cy = along(id, c.y, CARD_H);
+        const edgeX = side === "left" ? c.x : c.x + CARD_W;
+        lines.push([[tx, cy], [edgeX, cy]]);
+        handles.push(slideY(id, c, [tx, cy, edgeX, cy]));
+        trunkEnd = Math.max(trunkEnd, cy);
+      }
     }
 
-    const bus = kids.filter((k) => k.kind === "bus").map((k) => ({ id: k.childId, c: pos.get(k.childId)! }));
     if (bus.length > 0) {
       const autoY = Math.max(bottom + 12, Math.min(...bus.map((b) => b.c.y)) - GAP_Y / 2);
       const y = manual.busY[parentId] ?? autoY;
       const drops = bus.map((b) => along(b.id, b.c.x, CARD_W));
       bus.forEach((b, i) => {
         lines.push([[drops[i], y], [drops[i], b.c.y]]);
-        handles.push({
-          prop: "linkOff", id: b.id, axis: "x", x1: drops[i], y1: y, x2: drops[i], y2: b.c.y,
-          origin: b.c.x, min: b.c.x + ATTACH_MARGIN, max: b.c.x + CARD_W - ATTACH_MARGIN,
-        });
+        handles.push(slideX(b.id, b.c, [drops[i], y, drops[i], b.c.y]));
       });
       const x1 = Math.min(tx, ...drops);
       const x2 = Math.max(tx, ...drops);
@@ -163,7 +193,7 @@ function route(pos: Map<string, Pos>, edges: Edge[], manual: ManualLayout) {
       });
     }
   }
-  return { lines, handles };
+  return { lines, handles, sides };
 }
 
 /**
@@ -182,16 +212,16 @@ export function layoutChart(roots: PersonNode[], manual: ManualLayout = EMPTY_MA
   }
   for (const [id, p] of Object.entries(manual.pos)) if (all.pos.has(id)) all.pos.set(id, p);
 
-  const { lines, handles } = route(all.pos, edges, manual);
+  const { lines, handles, sides } = route(all.pos, edges, manual);
   const nodes = new Map<string, PersonNode>();
   const walk = (n: PersonNode) => (nodes.set(n.id, n), n.children.forEach(walk));
   roots.forEach(walk);
 
   const cards = [...all.pos].map(([id, p]) => ({ node: nodes.get(id)!, ...p }));
-  if (cards.length === 0) return { cards, lines, handles, width: 0, height: 0 };
+  if (cards.length === 0) return { cards, lines, handles, sides, width: 0, height: 0 };
   const width = Math.max(...cards.map((c) => c.x + CARD_W), ...handles.map((h) => Math.max(h.x1, h.x2)));
   const height = Math.max(...cards.map((c) => c.y + CARD_H), ...handles.map((h) => Math.max(h.y1, h.y2)));
-  return { cards, lines, handles, width, height };
+  return { cards, lines, handles, sides, width, height };
 }
 
 export type Rect = { x1: number; y1: number; x2: number; y2: number };

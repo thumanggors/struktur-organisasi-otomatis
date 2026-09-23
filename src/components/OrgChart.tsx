@@ -3,10 +3,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { User } from "lucide-react";
 import type { PersonNode } from "@/lib/tree";
-import { CARD_H, CARD_W, cardsInRect, layoutChart, shiftSelected, EMPTY_MANUAL, type LineHandle, type ManualLayout, type Pos, type Rect } from "@/lib/layout";
+import { CARD_H, CARD_W, cardsInRect, layoutChart, shiftSelected, EMPTY_MANUAL, SIDES, type LineHandle, type ManualLayout, type Side, type Pos, type Rect } from "@/lib/layout";
 import { divisiColorFor, type DivisiColorMap, type DivisiColorSet } from "@/lib/divisiColor";
 
 const LONG_PRESS = 500; // ms
+
+const SIDE_DOT: Record<Side, { label: string; style: React.CSSProperties }> = {
+  top: { label: "atas", style: { left: "50%", top: 0 } },
+  bottom: { label: "bawah", style: { left: "50%", top: "100%" } },
+  left: { label: "kiri", style: { left: 0, top: "50%" } },
+  right: { label: "kanan", style: { left: "100%", top: "50%" } },
+};
 
 const NEUTRAL: DivisiColorSet = {
   badge: "bg-slate-100 text-slate-700",
@@ -49,6 +56,7 @@ export default function OrgChart({
   manual,
   onMoveCard,
   onMoveLine,
+  onSetSide,
   selected,
   onSelect,
   onReplace,
@@ -61,6 +69,8 @@ export default function OrgChart({
   /** Passing these turns on edit mode: cards and bus lines become draggable. */
   onMoveCard?: (id: string, pos: Pos) => void;
   onMoveLine?: (prop: LineHandle["prop"], id: string, value: number) => void;
+  /** Picks which side of a report's card the line from its boss attaches to. */
+  onSetSide?: (id: string, side: Side) => void;
   /** Box-selected cards; dragging any of them moves the whole selection. */
   selected?: Set<string>;
   onSelect?: (ids: Set<string>) => void;
@@ -172,7 +182,7 @@ export default function OrgChart({
         {layout.cards.map(({ node, x, y }) => (
           <div
             key={node.id}
-            className={`absolute ${
+            className={`group absolute ${
               !editing
                 ? ""
                 : selected?.has(node.id)
@@ -183,6 +193,28 @@ export default function OrgChart({
             onPointerDown={editing ? (e) => gesture(e, { from: { x, y }, id: node.id, apply: (p) => onMoveCard!(node.id, p) }) : undefined}
           >
             <Card node={node} colorMap={colorMap} />
+            {onSetSide &&
+              layout.sides[node.id] &&
+              SIDES.map((side) => {
+                const active = layout.sides[node.id] === side;
+                return (
+                  <button
+                    key={side}
+                    type="button"
+                    title={`Garis menempel di sisi ${SIDE_DOT[side].label}`}
+                    aria-label={`Tempelkan garis di sisi ${SIDE_DOT[side].label}`}
+                    aria-pressed={active}
+                    className={`absolute z-10 h-4 w-4 -translate-x-1/2 -translate-y-1/2 cursor-pointer rounded-full border-2 transition-opacity ${
+                      active
+                        ? "border-white bg-sky-500 opacity-0 shadow group-hover:opacity-100"
+                        : "border-sky-500 bg-white opacity-0 group-hover:opacity-100 hover:bg-sky-100"
+                    }`}
+                    style={SIDE_DOT[side].style}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={() => onSetSide(node.id, side)}
+                  />
+                );
+              })}
           </div>
         ))}
         {editing &&

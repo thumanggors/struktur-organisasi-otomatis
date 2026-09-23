@@ -3,7 +3,7 @@ import { buildTree, listDivisi } from "@/lib/tree";
 import { divisiColorMap } from "@/lib/divisiColor";
 import { getSettings } from "@/lib/settings";
 import EditableOrgChart from "@/components/EditableOrgChart";
-import { EMPTY_MANUAL, type ManualLayout } from "@/lib/layout";
+import { EMPTY_MANUAL, SIDES, type ManualLayout, type Side } from "@/lib/layout";
 import ExportButtons from "@/components/ExportButtonsLazy";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +18,7 @@ export default async function HomePage() {
     if (p.busY !== null) saved.busY[p.id] = p.busY;
     if (p.trunkX !== null) saved.trunkX[p.id] = p.trunkX;
     if (p.linkOff !== null) saved.linkOff[p.id] = p.linkOff;
+    if (SIDES.includes(p.linkSide as Side)) saved.linkSide[p.id] = p.linkSide as Side;
   }
 
   return (
